@@ -371,6 +371,7 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
             width={300}
             height={200}
             className="rounded-md object-cover h-40 w-full sm:w-auto sm:h-32 aspect-video mb-4 border"
+            priority={true} 
           />
         <p className="text-sm text-muted-foreground">
             Creada el: {new Date(store.fecha_creacion || Date.now()).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
@@ -401,13 +402,13 @@ function ProductManagement({ storeId }: ProductManagementProps) {
     setIsLoadingProducts(true);
     const { data: productsData, error } = await supabase
       .from('productos')
-      .select(`
+      .select(\`
         *,
         imagenes_productos (
           url,
           es_principal
         )
-      `)
+      \`)
       .eq('tienda_id', storeId)
       .order('nombre', { ascending: true });
 
@@ -468,7 +469,10 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         }
       }
       // Eliminar registros de la tabla imagenes_productos
-      await supabase.from('imagenes_productos').delete().eq('producto_id', productToDelete.id);
+      const { error: deleteImageDbError } = await supabase.from('imagenes_productos').delete().eq('producto_id', productToDelete.id);
+       if (deleteImageDbError) {
+        toast({ title: "Error al eliminar refs de imágenes", description: deleteImageDbError.message, variant: "destructive" });
+      }
     }
     
     const { error: deleteProductError } = await supabase.from('productos').delete().eq('id', productToDelete.id);
@@ -525,14 +529,14 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       if (imageFile && productId) {
         // Crear un nombre de archivo único
         const fileName = `${Date.now()}_${imageFile.name.replace(/\s+/g, '_')}`;
-        const filePath = `${productId}/${fileName}`;
+        const filePath = `${productId}/${fileName}`; // Usar productId como parte de la ruta
 
         // Subir la imagen
         const { error: uploadError } = await supabase.storage
           .from('product-images')
           .upload(filePath, imageFile, {
             cacheControl: '3600',
-            upsert: false, // No sobrescribir si ya existe, aunque el timestamp lo hace único
+            upsert: false, 
           });
 
         if (uploadError) {
@@ -556,7 +560,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
         if (updateOldImagesError) {
           console.warn("Error al actualizar imágenes antiguas a no principales:", updateOldImagesError.message);
-          // No es un error bloqueante, pero se debería loggear o manejar
         }
 
         // Insertar la nueva imagen como principal
@@ -570,6 +573,8 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           });
         
         if (imageDbError) {
+           // Si falla la inserción en BD, intentar eliminar la imagen de Storage para consistencia
+          await supabase.storage.from('product-images').remove([filePath]);
           throw new Error(`Error al guardar la información de la imagen: ${imageDbError.message}`);
         }
         toast({ title: "Imagen Subida", description: "La imagen principal del producto ha sido actualizada." });
@@ -722,15 +727,16 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
   });
 
   useEffect(() => {
+    // Reset form when existingProduct changes (e.g., opening dialog for a new product or different product)
     form.reset({
       nombre: existingProduct?.nombre || "",
       descripcion: existingProduct?.descripcion || "",
       precio: existingProduct?.precio || 0,
       stock: existingProduct?.stock || 0,
-      imagenFile: null, // Siempre resetea el campo de archivo
+      imagenFile: null, // Always reset file input field value
     });
-    setImagePreview(existingProduct?.principal_image_url || null);
-    if (fileInputRef.current) { // Resetea el input de archivo visualmente
+    setImagePreview(existingProduct?.principal_image_url || null); // Update preview
+    if (fileInputRef.current) { // Visually reset the file input
         fileInputRef.current.value = "";
     }
   }, [existingProduct, form]);
@@ -740,13 +746,13 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
     setIsSubmittingProduct(true);
     await onSubmit(values);
     setIsSubmittingProduct(false);
-    // El cierre del diálogo y reseteo se maneja en el callback de onProductSubmit
+    // Dialog closing and form reset is handled by the parent component via onProductSubmit's success
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      form.setValue("imagenFile", event.target.files); // react-hook-form espera FileList
+      form.setValue("imagenFile", event.target.files); // react-hook-form expects FileList
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -754,7 +760,7 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
       reader.readAsDataURL(file);
     } else {
       form.setValue("imagenFile", null);
-      setImagePreview(existingProduct?.principal_image_url || null); // Vuelve a la imagen existente si se deselecciona
+      setImagePreview(existingProduct?.principal_image_url || null); // Revert to existing image if deselected
     }
   };
 
@@ -836,7 +842,7 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
                 </div>
               )}
               <FormDescription>
-                Sube una imagen para tu producto (máx. 5MB, formatos: JPG, PNG, WEBP).
+                Sube una imagen para tu producto (máx. 5MB, formatos: JPG, PNG, WEBP). Si no subes una nueva, se conservará la actual (si existe).
               </FormDescription>
               {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
             </FormItem>
