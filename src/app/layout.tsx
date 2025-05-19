@@ -1,8 +1,10 @@
+
 import type {Metadata} from 'next';
-import {Inter as FontSans} from 'next/font/google'; // Using Inter as a common clean font
+import {Inter as FontSans} from 'next/font/google';
 import './globals.css';
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
+import Navbar from '@/components/layout/Navbar'; // Importar Navbar
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -20,16 +22,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body 
+    <html lang="es" suppressHydrationWarning> {/* Cambiado lang a "es" */}
+      <body
         className={cn(
           "min-h-screen bg-background font-sans antialiased",
           fontSans.variable
         )}
       >
-        {children}
+        <Navbar /> {/* Añadir Navbar aquí */}
+        <main className="pt-16"> {/* Añadir padding-top para compensar la altura de la Navbar fija/sticky */}
+          {children}
+        </main>
         <Toaster />
       </body>
     </html>
   );
 }
+
+    
