@@ -49,31 +49,31 @@ export default function FeaturedStoresClient() {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
       {stores.map((store) => (
-        <Card key={store.id} className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 rounded-lg flex flex-col bg-card transform hover:-translate-y-1">
+        <Card key={store.id} className="overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 rounded-lg flex flex-col bg-card transform hover:-translate-y-1">
           <Link href={`/store/${store.id}`} className="block group h-full flex flex-col">
-            <div className="relative w-full h-52 sm:h-60">
+            <div className="relative w-full h-48 sm:h-52"> {/* Ajuste de altura para tiendas */}
               <Image
-                src={store.logo_url || `https://placehold.co/400x200.png?text=${encodeURIComponent(store.nombre)}`}
-                alt={`Logo de ${store.nombre}`}
+                src={store.logo_url || \`https://placehold.co/400x200.png?text=\${encodeURIComponent(store.nombre)}\`}
+                alt={\`Logo de \${store.nombre}\`}
                 fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                sizes="(max-width: 768px) 100vw, 33vw"
                 style={{ objectFit: 'cover' }}
                 className="bg-muted group-hover:scale-105 transition-transform duration-300"
                 data-ai-hint="artisan store logo"
               />
             </div>
             <CardHeader className="p-4 flex-grow">
-              <CardTitle className="text-xl font-semibold truncate group-hover:text-primary transition-colors" title={store.nombre}>{store.nombre}</CardTitle>
+              <CardTitle className="text-lg font-semibold truncate group-hover:text-primary transition-colors" title={store.nombre}>{store.nombre}</CardTitle>
               {store.descripcion && (
-                <CardDescription className="text-sm text-muted-foreground mt-1 line-clamp-3">
+                <CardDescription className="text-xs text-muted-foreground mt-1 line-clamp-2"> {/* Limita a 2 líneas la descripción */}
                   {store.descripcion}
                 </CardDescription>
               )}
             </CardHeader>
-            <CardFooter className="p-4 pt-2 mt-auto"> {/* Added mt-auto to push footer down */}
-              <Button variant="link" className="p-0 h-auto text-primary group-hover:underline">
+            <CardFooter className="p-4 pt-2 mt-auto">
+              <Button variant="link" size="sm" className="p-0 h-auto text-primary group-hover:underline">
                 Ver Tienda <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </CardFooter>

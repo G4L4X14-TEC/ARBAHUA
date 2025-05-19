@@ -21,9 +21,9 @@ export default function FeaturedProductsClient() {
         setError(null);
         const fetchedProducts = await getFeaturedProductsAction();
         setProducts(fetchedProducts);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Client error fetching products:", err);
-        setError("No se pudieron cargar los productos destacados.");
+        setError(err.message || "No se pudieron cargar los productos destacados.");
       } finally {
         setIsLoading(false);
       }
@@ -49,11 +49,11 @@ export default function FeaturedProductsClient() {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
       {products.map((product) => (
-        <Card key={product.id} className="overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 rounded-lg flex flex-col bg-card transform hover:-translate-y-1">
+        <Card key={product.id} className="overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 rounded-lg flex flex-col bg-card transform hover:-translate-y-1">
           <Link href={`/products/${product.id}`} className="block group h-full flex flex-col">
-            <div className="relative w-full h-64 sm:h-72">
+            <div className="relative w-full h-60 sm:h-64">
               <Image
                 src={product.imagen_url}
                 alt={product.nombre}
@@ -65,14 +65,14 @@ export default function FeaturedProductsClient() {
               />
             </div>
             <CardHeader className="p-4 flex-grow">
-              <CardTitle className="text-xl font-semibold truncate group-hover:text-primary transition-colors" title={product.nombre}>{product.nombre}</CardTitle>
-              <CardDescription className="text-sm text-muted-foreground mt-1">
-                {product.tienda_nombre}
+              <CardTitle className="text-lg font-semibold truncate group-hover:text-primary transition-colors" title={product.nombre}>{product.nombre}</CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-1">
+                {product.tienda_nombre || 'Artesanía Local'}
               </CardDescription>
             </CardHeader>
-            <CardFooter className="p-4 pt-0 mt-auto">
-              <p className="text-lg font-bold text-primary">${product.precio.toFixed(2)}</p>
-              <Button variant="outline" size="sm" className="ml-auto group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+            <CardFooter className="p-4 pt-0 mt-auto flex justify-between items-center">
+              <p className="text-base font-bold text-primary">${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}</p>
+              <Button variant="outline" size="sm" className="ml-auto group-hover:bg-primary group-hover:text-primary-foreground transition-colors text-xs px-3 py-1.5 h-auto">
                 Ver Detalles
               </Button>
             </CardFooter>

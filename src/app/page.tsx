@@ -11,6 +11,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-grow">
+        {/* Hero Section */}
         <header className="w-full bg-gradient-to-r from-primary/10 via-background to-primary/10 py-16 md:py-24 text-center">
           <div className="container mx-auto px-4">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-primary mb-6">
@@ -32,13 +33,14 @@ export default function HomePage() {
         </section>
 
         {/* Featured Artisans/Stores Section */}
-        <section className="w-full py-12 md:py-16 bg-secondary/30">
+        <section className="w-full py-12 md:py-16 bg-secondary/30"> {/* Usando secondary con opacidad para un tono diferente */}
           <div className="container mx-auto px-4">
             <h2 className="text-3xl font-semibold mb-10 text-center text-earthy-green">Artesanos Destacados</h2>
             <FeaturedStoresClient />
           </div>
         </section>
 
+        {/* Footer */}
         <footer className="w-full py-10 mt-12 border-t border-border bg-card text-card-foreground">
           <div className="container mx-auto px-4 text-center">
             <p className="text-sm text-muted-foreground">

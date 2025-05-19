@@ -21,22 +21,28 @@ export type StoreForDisplay = Tables<'tiendas'>;
 
 export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> {
   console.log('[getFeaturedProductsAction] Checking Environment Variables:');
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET'}`);
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY: ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'}`);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
+  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("[getFeaturedProductsAction] CRITICAL ERROR: Supabase URL or Anon Key is missing for server client.");
+    return []; // Return empty or throw error, depending on desired handling
+  }
 
   try {
     const cookieStore = cookies();
     const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl,
+      supabaseAnonKey,
       {
         cookies: {
           get(name: string) {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: CookieOptions) {
-            // Removed try...catch for simplification based on previous discussions
-            // If issues arise with cookie setting in specific environments, it might need re-evaluation
             cookieStore.set({ name, value, ...options });
           },
           remove(name: string, options: CookieOptions) {
@@ -48,17 +54,18 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
 
     const { data: productsData, error } = await supabase
       .from('productos')
-      .select(`
+      .select(\`
         *,
         tiendas (nombre),
         imagenes_productos (url, es_principal)
-      `)
+      \`)
       .eq('estado', 'activo') // Solo productos activos
       .order('fecha_creacion', { ascending: false }) // Mostrar los más recientes primero
       .limit(6); // Limitar a 6 productos destacados
 
     if (error) {
       console.error("[getFeaturedProductsAction] Error fetching featured products:", error.message);
+      // Consider logging more details from error if available, e.g., error.details, error.hint
       return []; // Return empty array on error
     }
     if (!productsData) return [];
@@ -70,7 +77,7 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
 
       return {
         ...coreProductFields,
-        imagen_url: principalImage?.url || anyImage?.url || `https://placehold.co/400x300.png?text=${encodeURIComponent(coreProductFields.nombre)}`,
+        imagen_url: principalImage?.url || anyImage?.url || \`https://placehold.co/400x300.png?text=\${encodeURIComponent(coreProductFields.nombre)}\`,
         tienda_nombre: tiendas?.nombre || 'Artesano Independiente',
       };
     });
@@ -82,14 +89,22 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
 
 export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
   console.log('[getFeaturedStoresAction] Checking Environment Variables:');
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET'}`);
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY: ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET' : 'NOT SET'}`);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
+  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
+  
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("[getFeaturedStoresAction] CRITICAL ERROR: Supabase URL or Anon Key is missing for server client.");
+    return [];
+  }
 
   try {
     const cookieStore = cookies();
     const supabase = createServerClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl,
+      supabaseAnonKey,
       {
         cookies: {
           get(name: string) {
