@@ -26,9 +26,9 @@ function createSupabaseServerClientAction() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // console.log('[SupabaseServerClientAction] Initializing Supabase client for Server Action.');
-  // console.log(`  NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
-  // console.log(`  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
+  console.log('[SupabaseServerClientAction] Initializing Supabase client for Server Action.');
+  console.log(`  NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
+  console.log(`  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
 
 
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -41,19 +41,19 @@ function createSupabaseServerClientAction() {
     supabaseAnonKey,
     {
       cookies: {
-        async get(name: string) {
-          return (await cookieStore).get(name)?.value;
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-        async set(name: string, value: string, options: CookieOptions) {
+        set(name: string, value: string, options: CookieOptions) {
           try {
-            (await cookieStore).set({ name, value, ...options });
+            cookieStore.set({ name, value, ...options });
           } catch (error) {
             // console.warn(`[SupabaseServerClientAction] Failed to set cookie '${name}' in Server Action:`, error);
           }
         },
-        async remove(name: string, options: CookieOptions) {
+        remove(name: string, options: CookieOptions) {
           try {
-            (await cookieStore).delete({ name, ...options }); // Corrected to use delete
+            cookieStore.delete({ name, ...options }); // Corrected to use delete
           } catch (error) {
             // console.warn(`[SupabaseServerClientAction] Failed to remove cookie '${name}' in Server Action:`, error);
           }
@@ -65,7 +65,7 @@ function createSupabaseServerClientAction() {
 
 
 export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> {
-  // console.log('[getFeaturedProductsAction] Attempting to fetch products.');
+  console.log('[getFeaturedProductsAction] Attempting to fetch products.');
   const supabase = createSupabaseServerClientAction();
 
   if (!supabase) {
@@ -73,7 +73,7 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
     return []; 
   }
   
-  // console.log('[getFeaturedProductsAction] Supabase client initialized. Fetching products...');
+  console.log('[getFeaturedProductsAction] Supabase client initialized. Fetching products...');
 
   try {
     const { data: productsData, error } = await supabase
@@ -91,19 +91,20 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
     }
 
     if (!productsData) {
-      // console.log("[getFeaturedProductsAction] No products data returned.");
+      console.log("[getFeaturedProductsAction] No products data returned.");
       return [];
     }
 
-    // console.log(`[getFeaturedProductsAction] Fetched ${productsData.length} products.`);
+    console.log(`[getFeaturedProductsAction] Fetched ${productsData.length} products.`);
 
     return productsData.map((pProduct: ProductFromSupabase): ProductForDisplay => {
       const { imagenes_productos, tiendas, ...coreProductFields } = pProduct;
       const principalImage = imagenes_productos?.find(img => img.es_principal === true);
       const anyImage = imagenes_productos?.[0]; 
       const placeholderText = encodeURIComponent(coreProductFields.nombre);
-      // Corrected line: using string concatenation instead of template literal for the placeholder part
       const imageUrl = principalImage?.url || anyImage?.url || 'https://placehold.co/400x300.png?text=' + placeholderText;
+      
+      console.log(`[getFeaturedProductsAction] Product: ${coreProductFields.nombre}, Principal Image URL: ${principalImage?.url}, Any Image URL: ${anyImage?.url}, Final imageUrl: ${imageUrl}`);
 
       return {
         ...coreProductFields,
@@ -118,7 +119,7 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
 }
 
 export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
-  // console.log('[getFeaturedStoresAction] Attempting to fetch stores.');
+  console.log('[getFeaturedStoresAction] Attempting to fetch stores.');
   const supabase = createSupabaseServerClientAction();
 
   if (!supabase) {
@@ -126,7 +127,7 @@ export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
     return [];
   }
 
-  // console.log('[getFeaturedStoresAction] Supabase client initialized. Fetching stores...');
+  console.log('[getFeaturedStoresAction] Supabase client initialized. Fetching stores...');
   
   try {
     const { data: storesData, error } = await supabase
@@ -142,10 +143,10 @@ export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
     }
     
     if (!storesData) {
-      // console.log("[getFeaturedStoresAction] No stores data returned.");
+      console.log("[getFeaturedStoresAction] No stores data returned.");
       return [];
     }
-    // console.log(`[getFeaturedStoresAction] Fetched ${storesData.length} stores.`);
+    console.log(`[getFeaturedStoresAction] Fetched ${storesData.length} stores.`);
     return storesData;
 
   } catch (e: any) {
