@@ -95,6 +95,7 @@ export default function UpdatePasswordPage() {
     });
     
     // Check URL hash for error_description on mount
+    // Supabase redirects with error_description in hash if the link is invalid/expired
     const hashParams = new URLSearchParams(window.location.hash.substring(1)); // Remove '#'
     const errorDescription = hashParams.get('error_description');
     if (errorDescription) {
@@ -130,6 +131,7 @@ export default function UpdatePasswordPage() {
         title: "Error al Actualizar Contraseña",
         description: error.message || "No se pudo actualizar la contraseña. El enlace podría haber expirado o ser inválido. Intenta de nuevo solicitando otro enlace.",
       });
+      // Adicionalmente, podrías establecer el error en el estado para mostrarlo en la UI si es necesario
       setAuthError(error.message || "No se pudo actualizar la contraseña.");
     } finally {
       setIsLoading(false);
@@ -148,7 +150,7 @@ export default function UpdatePasswordPage() {
           )}
            {authError && (
             <CardDescription className="text-destructive pt-2">
-              Error: {authError} Por favor, solicita un nuevo enlace de recuperación.
+              Error: {authError} Por favor, solicita un nuevo enlace de recuperación desde la página "Olvidé mi contraseña".
             </CardDescription>
           )}
         </CardHeader>
