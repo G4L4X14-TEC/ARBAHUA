@@ -32,7 +32,7 @@ import { Mail, Lock } from "lucide-react";
 
 const formSchema = z.object({
   email: z.string().email({ message: "Por favor, introduce un email válido." }),
-  password: z.string().min(1, { message: "La contraseña no puede estar vacía." }), // Mínimo 1 para no estar vacía
+  password: z.string().min(1, { message: "La contraseña no puede estar vacía." }),
 });
 
 type LoginFormValues = z.infer<typeof formSchema>;
@@ -53,6 +53,7 @@ export default function LoginPage() {
 
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
+    console.log('Intentando iniciar sesión con:', values);
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: values.email,
@@ -60,12 +61,16 @@ export default function LoginPage() {
       });
 
       if (authError) {
+        console.error("Error en signInWithPassword:", authError);
         throw authError;
       }
 
       if (!authData.user) {
-        throw new Error("No se pudo obtener la información del usuario.");
+        console.error("No se pudo obtener authData.user después del inicio de sesión.");
+        throw new Error("No se pudo obtener la información del usuario después del inicio de sesión.");
       }
+
+      console.log("Inicio de sesión en Supabase Auth exitoso. User ID:", authData.user.id);
 
       // Consultar el rol del usuario en la tabla 'usuarios'
       const { data: usuarioData, error: userError } = await supabase
@@ -74,16 +79,30 @@ export default function LoginPage() {
         .eq('id', authData.user.id)
         .single();
 
+      console.log("Resultado de la consulta a la tabla 'usuarios':", { usuarioData, userError });
+
       if (userError) {
-        // Si no se encuentra el usuario en la tabla 'usuarios' o hay otro error,
-        // es mejor cerrar la sesión para evitar un estado inconsistente.
-        await supabase.auth.signOut();
-        throw new Error(userError.message || "Error al verificar el rol del usuario.");
+        console.error("Error al obtener el perfil del usuario de la tabla 'usuarios':", userError);
+        await supabase.auth.signOut(); // Cerrar sesión si no podemos obtener el perfil
+        toast({
+          variant: "destructive",
+          title: "Error de Perfil",
+          description: userError.message || "No se pudo verificar tu rol en la aplicación. Por favor, contacta a soporte.",
+        });
+        setIsLoading(false);
+        return;
       }
 
       if (!usuarioData) {
-        await supabase.auth.signOut();
-        throw new Error("Rol de usuario no encontrado.");
+        console.error("No se encontró el perfil del usuario en la tabla 'usuarios' para el ID:", authData.user.id);
+        await supabase.auth.signOut(); // Cerrar sesión
+        toast({
+          variant: "destructive",
+          title: "Perfil No Encontrado",
+          description: "Tu perfil no fue encontrado en la aplicación. Por favor, contacta a soporte si crees que esto es un error.",
+        });
+        setIsLoading(false);
+        return;
       }
       
       toast({
@@ -91,17 +110,27 @@ export default function LoginPage() {
         description: "Bienvenido de nuevo a Arbahua.",
       });
 
+      console.log("Rol del usuario obtenido:", usuarioData.rol);
+
       // Redirección basada en el rol
       if (usuarioData.rol === "artesano") {
+        console.log("Redirigiendo a /artisan-dashboard para artesano...");
         router.push("/artisan-dashboard");
       } else if (usuarioData.rol === "cliente") {
+        console.log("Redirigiendo a / para cliente...");
         router.push("/"); 
       } else {
-        // Por si hay otros roles en el futuro o un caso no manejado
+        console.warn("Rol de usuario desconocido o no manejado:", usuarioData.rol);
+        toast({ 
+          title: "Rol Desconocido", 
+          description: "Tu rol no permite una redirección específica. Serás dirigido a la página principal.", 
+          variant: "destructive" 
+        });
         router.push("/"); 
       }
 
     } catch (error: any) {
+      console.error("Error general en onSubmit de LoginPage:", error);
       toast({
         variant: "destructive",
         title: "Error al Iniciar Sesión",
@@ -117,7 +146,7 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm shadow-xl bg-card">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-primary">Iniciar Sesión en Arbahua</CardTitle>
-          <CardDescription className="text-muted-foreground">
+          <CardDescription className="text-muted-foreground pt-2">
             Accede a tu cuenta.
           </CardDescription>
         </CardHeader>
