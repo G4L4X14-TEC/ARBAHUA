@@ -19,56 +19,88 @@ export type ProductForDisplay = Tables<'productos'> & {
 
 export type StoreForDisplay = Tables<'tiendas'>;
 
-export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> {
-  console.log('[getFeaturedProductsAction] Checking Environment Variables:');
+
+// Helper function to create a Supabase client for Server Actions
+function createSupabaseServerClientAction() {
+  const cookieStore = cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
-
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("[getFeaturedProductsAction] CRITICAL ERROR: Supabase URL or Anon Key is missing for server client.");
-    return []; // Return empty or throw error, depending on desired handling
+    // This case should ideally be handled by environment variable checks at build/startup
+    // or a more robust configuration management.
+    // For now, logging and throwing an error or returning a specific error state.
+    console.error("[SupabaseServerClientAction] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
+    // Depending on how you want to handle this, you might throw an error
+    // or return null/undefined and let the calling function handle it.
+    // throw new Error("Supabase configuration is missing for Server Action client.");
+    return null; 
   }
 
-  try {
-    const cookieStore = cookies();
-    const supabase = createServerClient<Database>(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: CookieOptions) {
-            cookieStore.set({ name, value: '', ...options });
-          },
+  return createServerClient<Database>(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
         },
-      }
-    );
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // This can happen in Next.js App Router when trying to set a cookie too late.
+            // For Server Actions, this is generally safe during the action's execution.
+            console.warn(`[SupabaseServerClientAction] Failed to set cookie '${name}':`, error);
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: '', ...options });
+          } catch (error) {
+            console.warn(`[SupabaseServerClientAction] Failed to remove cookie '${name}':`, error);
+          }
+        },
+      },
+    }
+  );
+}
 
+
+export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> {
+  console.log('[getFeaturedProductsAction] Initializing Supabase client for Server Action.');
+  const supabase = createSupabaseServerClientAction();
+
+  if (!supabase) {
+    console.error("[getFeaturedProductsAction] Failed to initialize Supabase client.");
+    return []; // Return empty array if client initialization failed
+  }
+  
+  console.log('[getFeaturedProductsAction] Supabase client initialized. Fetching products...');
+
+  try {
     const { data: productsData, error } = await supabase
       .from('productos')
-      .select(\`
+      .select(`
         *,
         tiendas (nombre),
         imagenes_productos (url, es_principal)
-      \`)
+      `)
       .eq('estado', 'activo') // Solo productos activos
       .order('fecha_creacion', { ascending: false }) // Mostrar los más recientes primero
       .limit(6); // Limitar a 6 productos destacados
 
     if (error) {
       console.error("[getFeaturedProductsAction] Error fetching featured products:", error.message);
-      // Consider logging more details from error if available, e.g., error.details, error.hint
       return []; // Return empty array on error
     }
-    if (!productsData) return [];
+
+    if (!productsData) {
+      console.log("[getFeaturedProductsAction] No products data returned.");
+      return [];
+    }
+
+    console.log(`[getFeaturedProductsAction] Fetched ${productsData.length} products.`);
 
     return productsData.map((pProduct: ProductFromSupabase) => {
       const { imagenes_productos, tiendas, ...coreProductFields } = pProduct;
@@ -88,38 +120,17 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
 }
 
 export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
-  console.log('[getFeaturedStoresAction] Checking Environment Variables:');
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  console.log('[getFeaturedStoresAction] Initializing Supabase client for Server Action.');
+  const supabase = createSupabaseServerClientAction();
 
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
-  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
-  
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("[getFeaturedStoresAction] CRITICAL ERROR: Supabase URL or Anon Key is missing for server client.");
+  if (!supabase) {
+    console.error("[getFeaturedStoresAction] Failed to initialize Supabase client.");
     return [];
   }
 
+  console.log('[getFeaturedStoresAction] Supabase client initialized. Fetching stores...');
+  
   try {
-    const cookieStore = cookies();
-    const supabase = createServerClient<Database>(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value;
-          },
-          set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
-          },
-          remove(name: string, options: CookieOptions) {
-            cookieStore.set({ name, value: '', ...options });
-          },
-        },
-      }
-    );
-
     const { data: storesData, error } = await supabase
       .from('tiendas')
       .select('*')
@@ -131,7 +142,14 @@ export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
       console.error("[getFeaturedStoresAction] Error fetching featured stores:", error.message);
       return []; // Return empty array on error
     }
-    return storesData || [];
+    
+    if (!storesData) {
+      console.log("[getFeaturedStoresAction] No stores data returned.");
+      return [];
+    }
+    console.log(`[getFeaturedStoresAction] Fetched ${storesData.length} stores.`);
+    return storesData;
+
   } catch (e: any) {
     console.error("[getFeaturedStoresAction] Critical error in action:", e.message);
     return []; // Return empty array on critical error
