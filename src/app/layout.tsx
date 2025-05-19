@@ -4,7 +4,7 @@ import {Inter as FontSans} from 'next/font/google';
 import './globals.css';
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
-import Navbar from '@/components/layout/Navbar'; // Importar Navbar
+import Navbar from '@/components/layout/Navbar';
 
 const fontSans = FontSans({
   subsets: ["latin"],
@@ -14,6 +14,11 @@ const fontSans = FontSans({
 export const metadata: Metadata = {
   title: 'Arbahua - Conecta con Artesanos',
   description: 'Arbahua: Tu marketplace para descubrir y vender artesanías únicas.',
+  icons: {
+    icon: '/favicon.svg', // For modern browsers
+    shortcut: '/favicon.svg', // For older browsers
+    apple: '/favicon.svg', // For Apple touch icons
+  },
 };
 
 export default function RootLayout({
@@ -29,8 +34,8 @@ export default function RootLayout({
           fontSans.variable
         )}
       >
-        <Navbar /> {/* Añadir Navbar aquí */}
-        <main className="pt-16"> {/* Añadir padding-top para compensar la altura de la Navbar fija/sticky */}
+        <Navbar />
+        <main className="pt-16">
           {children}
         </main>
         <Toaster />
