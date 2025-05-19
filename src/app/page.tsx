@@ -4,12 +4,12 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { ArrowRight } from 'lucide-react';
-// import { createServerClient } from '@supabase/ssr'; // Comentado temporalmente
-// import type { CookieOptions } from '@supabase/ssr'; // Comentado temporalmente
-// import { cookies } from 'next/headers'; // Comentado temporalmente
+import { createServerClient } from '@supabase/ssr';
+import type { CookieOptions } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import type { Tables, Database } from '@/lib/supabase/database.types';
 
-// export const dynamic = 'force-dynamic'; // Comentado temporalmente, reintroducir si es necesario
+export const dynamic = 'force-dynamic';
 
 // Type for products fetched from Supabase, including nested data
 type ProductFromSupabase = Tables<'productos'> & {
@@ -25,7 +25,6 @@ type ProductForDisplay = Tables<'productos'> & {
 
 type StoreForDisplay = Tables<'tiendas'>;
 
-/* Comentado temporalmente para evitar error de cookies
 async function getFeaturedProducts(supabase: ReturnType<typeof createServerClient<Database>>): Promise<ProductForDisplay[]> {
   const { data: productsData, error } = await supabase
     .from('productos')
@@ -34,8 +33,8 @@ async function getFeaturedProducts(supabase: ReturnType<typeof createServerClien
       tiendas (nombre),
       imagenes_productos (url, es_principal)
     `)
-    .eq('estado', 'activo')
-    .limit(6);
+    .eq('estado', 'activo') // Solo productos activos
+    .limit(6); // Limitar a 6 productos destacados
 
   if (error) {
     console.error("Error fetching featured products:", error.message);
@@ -60,8 +59,8 @@ async function getFeaturedStores(supabase: ReturnType<typeof createServerClient<
   const { data: storesData, error } = await supabase
     .from('tiendas')
     .select('*')
-    .eq('estado', 'activa')
-    .limit(3);
+    .eq('estado', 'activa') // Solo tiendas activas
+    .limit(3); // Limitar a 3 tiendas destacadas
 
   if (error) {
     console.error("Error fetching featured stores:", error.message);
@@ -69,27 +68,23 @@ async function getFeaturedStores(supabase: ReturnType<typeof createServerClient<
   }
   return storesData || [];
 }
-*/
 
 export default async function HomePage() {
-  /* Comentado temporalmente para evitar error de cookies
   const cookieStore = cookies();
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
-          // const cookieStore = cookies(); // Llamar a cookies() dentro de la función
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          // const cookieStore = cookies(); // Llamar a cookies() dentro de la función
-          cookieStore.set({ name, value, ...options });
+          // cookieStore.set({ name, value, ...options }); // Comentado para prueba de error de cookies
         },
         remove(name: string, options: CookieOptions) {
-          // const cookieStore = cookies(); // Llamar a cookies() dentro de la función
-          cookieStore.set({ name, value: '', ...options });
+          // cookieStore.set({ name, value: '', ...options }); // Comentado para prueba de error de cookies
         },
       },
     }
@@ -97,12 +92,6 @@ export default async function HomePage() {
 
   const products = await getFeaturedProducts(supabase);
   const stores = await getFeaturedStores(supabase);
-  */
-  
-  // Placeholder data until the cookie issue is resolved
-  const products: ProductForDisplay[] = [];
-  const stores: StoreForDisplay[] = [];
-
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -218,3 +207,5 @@ export default async function HomePage() {
     </div>
   );
 }
+
+    
