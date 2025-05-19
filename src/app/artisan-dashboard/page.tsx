@@ -1,28 +1,77 @@
 
 "use client";
-
 import * as React from "react";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image"; // Import next/image
+import Image from "next/image";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import type { Tables, TablesInsert, TablesUpdate, Database, Json } from "@/lib/supabase/database.types";
-
+import type { Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/database.types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { 
+  Card, 
+  CardHeader, 
+  CardTitle, 
+  CardContent, 
+  CardDescription, 
+  CardFooter 
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { 
+  Form, 
+  FormControl, 
+  FormDescription, 
+  FormField, 
+  FormItem, 
+  FormLabel, 
+  FormMessage 
+} from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Loader2, Store as StoreIcon, Edit3, PlusCircle, LogOut, Trash2, PackagePlus, List, AlertTriangle, ImagePlus } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogFooter } from "@/components/ui/alert-dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { 
+  Loader2, 
+  Store as StoreIcon, 
+  Edit3, 
+  PlusCircle, 
+  LogOut, 
+  Trash2, 
+  PackagePlus, 
+  List, 
+  AlertTriangle, 
+  ImagePlus 
+} from "lucide-react";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger, 
+  DialogFooter, 
+  DialogClose 
+} from "@/components/ui/dialog";
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogHeader, 
+  AlertDialogTitle,
+  AlertDialogFooter
+} from "@/components/ui/alert-dialog";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
 
 // Schema for creating/editing a store
 const storeFormSchema = z.object({
@@ -34,7 +83,6 @@ type StoreFormValues = z.infer<typeof storeFormSchema>;
 // Schema for creating/editing a product
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-
 const productFormSchema = z.object({
   nombre: z.string().min(3, "El nombre debe tener al menos 3 caracteres.").max(255),
   descripcion: z.string().max(1000, "La descripción no puede exceder los 1000 caracteres.").optional().nullable(),
@@ -45,7 +93,7 @@ const productFormSchema = z.object({
     .nullable()
     .refine(
       (files) => !files || files.length === 0 || files[0].size <= MAX_FILE_SIZE,
-      `El tamaño máximo de la imagen es 5MB.`
+      \`El tamaño máximo de la imagen es 5MB.\`
     )
     .refine(
       (files) => !files || files.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files[0].type),
@@ -59,12 +107,10 @@ type ProductWithPrincipalImage = Tables<'productos'> & {
   principal_image_url?: string | null;
 };
 
-
 export default function ArtisanDashboardPage() {
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
-
   const [user, setUser] = useState<User | null>(null);
   const [artisanProfile, setArtisanProfile] = useState<Tables<'usuarios'> | null>(null);
   const [store, setStore] = useState<Tables<'tiendas'> | null>(null);
@@ -72,53 +118,76 @@ export default function ArtisanDashboardPage() {
   const [isStoreLoading, setIsStoreLoading] = useState(true);
   const [showCreateEditStoreForm, setShowCreateEditStoreForm] = useState(false);
 
+  // Fetch user data
   useEffect(() => {
     const fetchUserData = async () => {
       setIsLoading(true);
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-
+      
       if (authError || !authUser) {
-        toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para acceder a esta página.", variant: "destructive" });
+        toast({ 
+          title: "Acceso Denegado", 
+          description: "Debes iniciar sesión para acceder a esta página.", 
+          variant: "destructive" 
+        });
         router.push("/login");
         return;
       }
-      setUser(authUser);
 
+      setUser(authUser);
+      
       const { data: profileData, error: profileError } = await supabase
         .from("usuarios")
         .select("*")
         .eq("id", authUser.id)
         .single();
-
+      
       if (profileError || !profileData) {
-        toast({ title: "Error de Perfil", description: "No se pudo cargar tu perfil de artesano. Intenta iniciar sesión de nuevo.", variant: "destructive" });
+        toast({ 
+          title: "Error de Perfil", 
+          description: "No se pudo cargar tu perfil de artesano. Intenta iniciar sesión de nuevo.", 
+          variant: "destructive" 
+        });
         await supabase.auth.signOut();
         router.push("/login");
         return;
       }
 
       if (profileData.rol !== "artesano") {
-        toast({ title: "Acceso Denegado", description: "Esta página es solo para artesanos.", variant: "destructive" });
+        toast({ 
+          title: "Acceso Denegado", 
+          description: "Esta página es solo para artesanos.", 
+          variant: "destructive" 
+        });
         router.push("/");
         return;
       }
+
       setArtisanProfile(profileData);
       setIsLoading(false);
     };
+
     fetchUserData();
   }, [supabase, router, toast]);
 
+  // Fetch store data
   const fetchStore = useCallback(async () => {
     if (!artisanProfile) return;
+    
     setIsStoreLoading(true);
+    
     const { data: storeData, error: storeError } = await supabase
       .from("tiendas")
       .select("*")
       .eq("artesano_id", artisanProfile.id)
       .maybeSingle();
-
+    
     if (storeError) {
-      toast({ title: "Error al Cargar Tienda", description: storeError.message, variant: "destructive" });
+      toast({ 
+        title: "Error al Cargar Tienda", 
+        description: storeError.message, 
+        variant: "destructive" 
+      });
       setStore(null);
     } else {
       setStore(storeData);
@@ -128,6 +197,7 @@ export default function ArtisanDashboardPage() {
         setShowCreateEditStoreForm(false);
       }
     }
+    
     setIsStoreLoading(false);
   }, [supabase, artisanProfile, toast]);
 
@@ -140,13 +210,17 @@ export default function ArtisanDashboardPage() {
   const handleStoreCreatedOrUpdated = (updatedStore: Tables<'tiendas'>) => {
     setStore(updatedStore);
     setShowCreateEditStoreForm(false);
-    toast({ title: store?.id ? "Tienda Actualizada" : "Tienda Creada", description: \`Tu tienda "\${updatedStore.nombre}" ha sido \${store?.id ? 'actualizada' : 'creada'} con éxito.\` });
+    toast({ 
+      title: store?.id ? "Tienda Actualizada" : "Tienda Creada", 
+      description: \`Tu tienda "\${updatedStore.nombre}" ha sido \${store?.id ? 'actualizada' : 'creada'} con éxito.\`
+    });
   };
-  
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     router.push('/');
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
+    // router.refresh(); // Not strictly necessary here if Navbar handles it or redirect is sufficient
   };
 
   if (isLoading) {
@@ -167,7 +241,12 @@ export default function ArtisanDashboardPage() {
           </CardHeader>
           <CardContent>
             <p>No tienes permiso para ver esta página o no has iniciado sesión como artesano.</p>
-            <Button onClick={() => router.push('/login')} className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">Ir a Iniciar Sesión</Button>
+            <Button 
+              onClick={() => router.push('/login')} 
+              className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              Ir a Iniciar Sesión
+            </Button>
           </CardContent>
         </Card>
       </main>
@@ -222,11 +301,16 @@ interface CreateEditStoreFormProps {
   onCancel?: () => void;
 }
 
-function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: CreateEditStoreFormProps) {
+function CreateEditStoreForm({ 
+  artisanId, 
+  existingStore, 
+  onSuccess, 
+  onCancel 
+}: CreateEditStoreFormProps) {
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
+  
   const form = useForm<StoreFormValues>({
     resolver: zodResolver(storeFormSchema),
     defaultValues: {
@@ -235,11 +319,12 @@ function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: 
     },
   });
 
-  async function onSubmit(values: StoreFormValues) {
+  const onSubmit = async (values: StoreFormValues) => {
     setIsSubmitting(true);
+    
     try {
       let resultStore: Tables<'tiendas'> | null = null;
-      const storePayload: TablesUpdate<'tiendas'> = { 
+      const storePayload = { 
         nombre: values.nombre,
         descripcion: values.descripcion || null,
       };
@@ -247,27 +332,31 @@ function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: 
       if (existingStore?.id) { 
         const { data, error } = await supabase
           .from("tiendas")
-          .update(storePayload)
+          .update(storePayload as TablesUpdate<'tiendas'>)
           .eq("id", existingStore.id)
-          .eq("artesano_id", artisanId) 
+          .eq("artesano_id", artisanId)
           .select()
           .single();
+        
         if (error) throw error;
         resultStore = data;
       } else {
         const insertPayload: TablesInsert<'tiendas'> = {
-            ...storePayload,
-            artesano_id: artisanId,
-            estado: 'activa', 
+          ...storePayload,
+          artesano_id: artisanId,
+          estado: 'activa', 
         };
+        
         const { data, error } = await supabase
           .from("tiendas")
           .insert(insertPayload)
           .select()
           .single();
+        
         if (error) throw error;
         resultStore = data;
       }
+
       if (resultStore) {
         onSuccess(resultStore);
       }
@@ -280,7 +369,7 @@ function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: 
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <Card className="w-full shadow-lg border-primary/20">
@@ -316,7 +405,12 @@ function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: 
                 <FormItem>
                   <FormLabel>Descripción de la Tienda (Opcional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Cuenta un poco sobre tu tienda, qué tipo de artesanías ofreces, tu inspiración..." {...field} value={field.value ?? ''} rows={4} />
+                    <Textarea 
+                      placeholder="Cuenta un poco sobre tu tienda, qué tipo de artesanías ofreces, tu inspiración..." 
+                      {...field} 
+                      value={field.value ?? ''} 
+                      rows={4} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -324,15 +418,27 @@ function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: 
             />
             <div className="flex flex-col sm:flex-row gap-2 justify-end pt-2">
               {existingStore?.id && onCancel && (
-                 <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-                    Cancelar
-                 </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={onCancel} 
+                  disabled={isSubmitting}
+                >
+                  Cancelar
+                </Button>
               )}
-              <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+              <Button 
+                type="submit" 
+                className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+                disabled={isSubmitting}
+              >
                 {isSubmitting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : existingStore?.id ? <Edit3 className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" /> }
-                {isSubmitting ? (existingStore?.id ? "Actualizando..." : "Creando Tienda...") : (existingStore?.id ? "Guardar Cambios" : "Crear Tienda")}
+                {isSubmitting ? 
+                  (existingStore?.id ? "Actualizando..." : "Creando Tienda...") : 
+                  (existingStore?.id ? "Guardar Cambios" : "Crear Tienda")
+                }
               </Button>
             </div>
           </form>
@@ -364,20 +470,27 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         </Button>
       </CardHeader>
       <CardContent className="space-y-2">
-         <Image
-            data-ai-hint="crafts store logo"
-            src={store.logo_url || "https://placehold.co/300x200.png"}
-            alt={\`Logo de \${store.nombre}\`}
-            width={300}
-            height={200}
-            className="rounded-md object-cover h-40 w-full sm:w-auto sm:h-32 aspect-video mb-4 border"
-            priority={true} 
-          />
+        <Image
+          data-ai-hint="crafts store logo"
+          src={store.logo_url || "https://placehold.co/300x200.png"}
+          alt={\`Logo de \${store.nombre}\`}
+          width={300}
+          height={200}
+          className="rounded-md object-cover h-40 w-full sm:w-auto sm:h-32 aspect-video mb-4 border"
+          priority={true} 
+        />
         <p className="text-sm text-muted-foreground">
-            Creada el: {new Date(store.fecha_creacion || Date.now()).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+          Creada el: {new Date(store.fecha_creacion || Date.now()).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
-        <p className="text-sm ">
-            Estado: <span className={\`font-semibold px-2 py-0.5 rounded-full text-xs \${store.estado === 'activa' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}\`}>{store.estado}</span>
+        <p className="text-sm">
+          Estado: 
+          <span className={\`font-semibold px-2 py-0.5 rounded-full text-xs \${
+            store.estado === 'activa' 
+              ? 'bg-green-100 text-green-700' 
+              : 'bg-red-100 text-red-700'
+          }\`}>
+            {store.estado}
+          </span>
         </p>
       </CardContent>
     </Card>
@@ -399,17 +512,25 @@ function ProductManagement({ storeId }: ProductManagementProps) {
   const [productToDelete, setProductToDelete] = useState<ProductWithPrincipalImage | null>(null);
 
   const fetchProducts = useCallback(async () => {
+    console.log("[ProductManagement] Fetching products for storeId:", storeId);
     setIsLoadingProducts(true);
+    
     const { data: productsData, error } = await supabase
       .from('productos')
-      .select('*, imagenes_productos(url, es_principal)')
+      .select('*, imagenes_productos(url, es_principal, file_path)') // also select file_path for deletion
       .eq('tienda_id', storeId)
       .order('nombre', { ascending: true });
-
+    
     if (error) {
-      toast({ title: "Error al cargar productos", description: error.message, variant: "destructive" });
+      console.error("[ProductManagement] Error fetching products:", error);
+      toast({ 
+        title: "Error al cargar productos", 
+        description: error.message, 
+        variant: "destructive" 
+      });
       setProducts([]);
     } else {
+      console.log("[ProductManagement] Fetched products data:", productsData);
       const productsWithImages = productsData?.map(p => {
         const principalImage = (p.imagenes_productos as unknown as Tables<'imagenes_productos'>[])?.find(img => img.es_principal === true);
         return {
@@ -417,8 +538,10 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           principal_image_url: principalImage?.url || null
         };
       }) || [];
+      
       setProducts(productsWithImages as ProductWithPrincipalImage[]);
     }
+    
     setIsLoadingProducts(false);
   }, [supabase, storeId, toast]);
 
@@ -443,145 +566,240 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
   const onConfirmDelete = async () => {
     if (!productToDelete) return;
+    console.log("[ProductManagement] Confirming delete for product:", productToDelete);
     
-    const { data: imagesToDelete, error: imagesError } = await supabase
-      .from('imagenes_productos')
-      .select('file_path')
-      .eq('producto_id', productToDelete.id);
-
-    if (imagesError) {
-      toast({ title: "Error al obtener imágenes para eliminar", description: imagesError.message, variant: "destructive" });
-    }
-
-    if (imagesToDelete && imagesToDelete.length > 0) {
-      const filePaths = imagesToDelete.map(img => img.file_path).filter(path => path !== null) as string[];
-      if (filePaths.length > 0) {
-        const { error: storageError } = await supabase.storage.from('product-images').remove(filePaths);
-        if (storageError) {
-          toast({ title: "Error al eliminar imágenes de Storage", description: storageError.message, variant: "destructive" });
+    try {
+      // 1. Get all image file_paths for the product
+      const { data: imagesToDelete, error: imagesError } = await supabase
+        .from('imagenes_productos')
+        .select('file_path')
+        .eq('producto_id', productToDelete.id);
+      
+      if (imagesError) {
+        console.error("[ProductManagement] Error fetching image paths for deletion:", imagesError);
+        throw imagesError;
+      }
+      
+      // 2. Delete images from Supabase Storage
+      if (imagesToDelete && imagesToDelete.length > 0) {
+        const filePaths = imagesToDelete
+          .map(img => img.file_path)
+          .filter(path => path !== null) as string[];
+        
+        if (filePaths.length > 0) {
+          console.log("[ProductManagement] Deleting files from storage:", filePaths);
+          const { error: storageError } = await supabase
+            .storage
+            .from('product-images') // Ensure this bucket name is correct
+            .remove(filePaths);
+          
+          if (storageError) {
+            console.error("[ProductManagement] Error deleting files from storage:", storageError);
+            // Decide if you want to throw or just log and continue to delete DB records
+            // For now, we'll log and continue, but you might want to stop if storage deletion fails
+          } else {
+            console.log("[ProductManagement] Files deleted from storage successfully.");
+          }
         }
       }
-      const { error: deleteImageDbError } = await supabase.from('imagenes_productos').delete().eq('producto_id', productToDelete.id);
-       if (deleteImageDbError) {
-        toast({ title: "Error al eliminar refs de imágenes", description: deleteImageDbError.message, variant: "destructive" });
+      
+      // 3. Delete image records from 'imagenes_productos' table (CASCADE delete might handle this if set up)
+      // If not using CASCADE, explicitly delete:
+      const { error: deleteImageDbError } = await supabase
+        .from('imagenes_productos')
+        .delete()
+        .eq('producto_id', productToDelete.id);
+
+      if (deleteImageDbError) {
+        console.error("[ProductManagement] Error deleting image records from DB:", deleteImageDbError);
+        // Decide if you want to throw or just log
+      } else {
+        console.log("[ProductManagement] Image records deleted from DB.");
       }
+
+      // 4. Delete the product itself
+      console.log("[ProductManagement] Deleting product from DB:", productToDelete.id);
+      const { error: deleteProductError } = await supabase
+        .from('productos')
+        .delete()
+        .eq('id', productToDelete.id);
+      
+      if (deleteProductError) {
+        console.error("[ProductManagement] Error deleting product from DB:", deleteProductError);
+        throw deleteProductError;
+      }
+      
+      toast({ 
+        title: "Producto Eliminado", 
+        description: \`"\${productToDelete.nombre}" ha sido eliminado.\`
+      });
+      console.log("[ProductManagement] Product deleted successfully, fetching updated products list.");
+      fetchProducts();
+    } catch (error: any) {
+      console.error("[ProductManagement] Critical error during product deletion process:", error);
+      toast({
+        title: "Error al eliminar producto",
+        description: error.message || "Ocurrió un problema inesperado.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsConfirmDeleteDialogOpen(false);
+      setProductToDelete(null);
     }
-    
-    const { error: deleteProductError } = await supabase.from('productos').delete().eq('id', productToDelete.id);
-    if (deleteProductError) {
-      toast({ title: "Error al eliminar producto", description: deleteProductError.message, variant: "destructive" });
-    } else {
-      toast({ title: "Producto Eliminado", description: \`"\${productToDelete.nombre}" ha sido eliminado.\` });
-      fetchProducts(); 
-    }
-    setIsConfirmDeleteDialogOpen(false);
-    setProductToDelete(null);
   };
 
   const onProductSubmit = async (values: ProductFormValues) => {
     let productId = editingProduct?.id;
-    let productUpdated = false;
+    let productUpdatedOrCreated = false;
+    console.log("[ProductManagement] Submitting product form. Editing product:", editingProduct, "Values:", values);
 
     try {
-      const productPayload: Omit<TablesInsert<'productos'>, 'id' | 'tienda_id' | 'fecha_creacion' | 'updated_at'> & { tienda_id: string; estado: Database["public"]["Enums"]["estado_producto_type"] } = {
+      const productPayload = {
         nombre: values.nombre,
-        descripcion: values.descripcion,
+        descripcion: values.descripcion || null,
         precio: values.precio,
         stock: values.stock,
         tienda_id: storeId,
-        estado: 'activo' as Database["public"]["Enums"]["estado_producto_type"],
-        metadatos: null 
+        estado: 'activo' as "activo" | "inactivo" | "borrador",
+        // metadatos: null // Assuming no specific metadata for now
       };
-
+      
+      let result;
+      
       if (editingProduct) {
-        const { data, error } = await supabase
+        console.log("[ProductManagement] Updating existing product:", editingProduct.id, "Payload:", productPayload);
+        result = await supabase
           .from('productos')
           .update(productPayload as TablesUpdate<'productos'>)
           .eq('id', editingProduct.id)
           .select()
           .single();
-        if (error) throw error;
-        productId = data?.id;
-        toast({ title: "Producto Actualizado", description: \`"\${data?.nombre}" ha sido actualizado.\` });
-        productUpdated = true;
+        
+        if (result.error) {
+          console.error("[ProductManagement] Error updating product:", result.error);
+          throw result.error;
+        }
+        
+        productId = result.data?.id;
+        toast({ 
+          title: "Producto Actualizado", 
+          description: \`"\${result.data?.nombre}" ha sido actualizado.\`
+        });
+        productUpdatedOrCreated = true;
+        console.log("[ProductManagement] Product updated successfully:", result.data);
       } else {
-        const { data, error } = await supabase
+        console.log("[ProductManagement] Inserting new product. Payload:", productPayload);
+        result = await supabase
           .from('productos')
           .insert(productPayload as TablesInsert<'productos'>)
           .select()
           .single();
-        if (error) throw error;
-        productId = data?.id;
-        toast({ title: "Producto Creado", description: \`"\${data?.nombre}" ha sido añadido a tu tienda.\` });
-        productUpdated = true;
+        
+        if (result.error) {
+          console.error("[ProductManagement] Error inserting product:", result.error);
+          throw result.error;
+        }
+        
+        productId = result.data?.id;
+        toast({ 
+          title: "Producto Creado", 
+          description: \`"\${result.data?.nombre}" ha sido añadido a tu tienda.\`
+        });
+        productUpdatedOrCreated = true;
+        console.log("[ProductManagement] Product inserted successfully:", result.data);
       }
-
+      
       const imageFile = values.imagenFile?.[0];
+      
       if (imageFile && productId) {
-        const fileName = \`\${Date.now()}_\${imageFile.name.replace(/\s+/g, '_')}\`;
-        const filePath = \`\${productId}/\${fileName}\`; 
-
-        const { error: uploadError } = await supabase.storage
-          .from('product-images')
+        console.log("[ProductManagement] Image file present. Uploading for productId:", productId, "File:", imageFile.name);
+        const fileName = \`\${Date.now()}_\${imageFile.name.replace(/\\s+/g, '_')}\`;
+        const filePath = \`\${productId}/\${fileName}\`; // Store images in a folder per product
+        
+        console.log("[ProductManagement] Uploading image to path:", filePath);
+        const { error: uploadError } = await supabase
+          .storage
+          .from('product-images') // Ensure this bucket name is correct
           .upload(filePath, imageFile, {
             cacheControl: '3600',
-            upsert: false, 
-          });
-
+            upsert: false, // Set to true if you want to overwrite if file with same name exists
+          }); 
+          
         if (uploadError) {
-          throw new Error(\`Error al subir la imagen: \${uploadError.message}\`);
+          console.error("[ProductManagement] Error uploading image to storage:", uploadError);
+          throw uploadError;
         }
-
+        console.log("[ProductManagement] Image uploaded to storage. Getting public URL.");
+        
         const { data: publicUrlData } = supabase.storage
           .from('product-images')
           .getPublicUrl(filePath);
-
+          
         if (!publicUrlData?.publicUrl) {
+          console.error("[ProductManagement] Could not get public URL for image.");
           throw new Error("No se pudo obtener la URL pública de la imagen.");
         }
+        console.log("[ProductManagement] Public URL obtained:", publicUrlData.publicUrl);
         
-        await supabase
+        // Set other images for this product to not be principal
+        console.log("[ProductManagement] Setting other images for product", productId, "to not principal.");
+        const { error: updateOldImagesError } = await supabase
           .from('imagenes_productos')
           .update({ es_principal: false })
           .eq('producto_id', productId);
 
+        if (updateOldImagesError){
+          console.error("[ProductManagement] Error updating old images to not principal:", updateOldImagesError);
+          // Non-critical, proceed with inserting new image record
+        }
+          
+        console.log("[ProductManagement] Inserting new image record into DB. ProductId:", productId, "URL:", publicUrlData.publicUrl);
         const { error: imageDbError } = await supabase
           .from('imagenes_productos')
           .insert({
             producto_id: productId,
             url: publicUrlData.publicUrl,
-            file_path: filePath,
+            file_path: filePath, // Store the file_path for easier deletion later
             es_principal: true,
           });
-        
+          
         if (imageDbError) {
+          console.error("[ProductManagement] Error inserting image record into DB:", imageDbError, "Attempting to remove uploaded file from storage:", filePath);
+          // If DB insert fails, try to remove the uploaded file to avoid orphans
           await supabase.storage.from('product-images').remove([filePath]);
           throw new Error(\`Error al guardar la información de la imagen: \${imageDbError.message}\`);
         }
-        toast({ title: "Imagen Subida", description: "La imagen principal del producto ha sido actualizada." });
+        
+        toast({ 
+          title: "Imagen Subida", 
+          description: "La imagen principal del producto ha sido actualizada."
+        });
+        console.log("[ProductManagement] Image record inserted into DB successfully.");
       }
-
-      if (productUpdated) {
+      
+      if (productUpdatedOrCreated) {
         setIsProductDialogOpen(false);
         setEditingProduct(null);
+        console.log("[ProductManagement] Product operation successful, fetching updated product list.");
         fetchProducts();
       }
-
     } catch (error: any) {
+      console.error("[ProductManagement] Error in product submission process:", error);
       toast({
-        title: \`Error en la operación del producto\`,
+        title: "Error en la operación del producto",
         description: error.message || "Ocurrió un problema.",
         variant: "destructive",
       });
     }
   };
 
-
   return (
     <Card className="w-full shadow-lg mt-8 border-primary/20">
       <CardHeader className="flex flex-row justify-between items-center">
         <div>
-          <CardTitle className="text-2xl text-primary flex items-center gap-2"><List className="h-6 w-6" />Gestión de Productos</CardTitle>
+          <CardTitle className="text-2xl text-primary flex items-center gap-2">
+            <List className="h-6 w-6" />Gestión de Productos
+          </CardTitle>
           <CardDescription>Añade, edita y visualiza los productos de tu tienda.</CardDescription>
         </div>
         <Button onClick={handleAddNewProduct} className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -616,7 +834,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
                 <TableRow key={product.id}>
                   <TableCell>
                     <Image
-                      src={product.principal_image_url || "https://placehold.co/100x100.png?text=Producto"}
+                      src={product.principal_image_url || "https://placehold.co/100x100.png"}
                       alt={product.nombre}
                       width={60}
                       height={60}
@@ -625,7 +843,9 @@ function ProductManagement({ storeId }: ProductManagementProps) {
                     />
                   </TableCell>
                   <TableCell className="font-medium">{product.nombre}</TableCell>
-                  <TableCell className="text-right">${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}</TableCell>
+                  <TableCell className="text-right">
+                    MXN${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}
+                  </TableCell>
                   <TableCell className="text-right">{product.stock}</TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
@@ -641,14 +861,16 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           </Table>
         )}
       </CardContent>
-
+      
       <Dialog open={isProductDialogOpen} onOpenChange={(isOpen) => {
           setIsProductDialogOpen(isOpen);
           if (!isOpen) setEditingProduct(null);
       }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingProduct ? "Editar Producto" : "Añadir Nuevo Producto"}</DialogTitle>
+            <DialogTitle>
+              {editingProduct ? "Editar Producto" : "Añadir Nuevo Producto"}
+            </DialogTitle>
             <DialogDescription>
               {editingProduct ? "Modifica los detalles de tu producto." : "Ingresa la información de tu nueva creación."}
             </DialogDescription>
@@ -663,19 +885,25 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           />
         </DialogContent>
       </Dialog>
-
+      
       <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle className="text-destructive"/>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="text-destructive"/>
+              ¿Estás seguro?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente el producto
+              Esta acción no se puede deshacer. Se eliminará permanentemente el producto 
               "\${productToDelete?.nombre}" y todas sus imágenes asociadas de tu tienda.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setProductToDelete(null)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={onConfirmDelete} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+            <AlertDialogAction 
+              onClick={onConfirmDelete} 
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
               Sí, eliminar producto
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -691,11 +919,15 @@ interface ProductFormDialogProps {
   onClose: () => void;
 }
 
-function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDialogProps) {
+function ProductFormDialog({ 
+  onSubmit, 
+  existingProduct, 
+  onClose 
+}: ProductFormDialogProps) {
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-
+  
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
@@ -708,6 +940,7 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
   });
 
   useEffect(() => {
+    // Reset form when existingProduct changes (e.g., opening dialog for different products)
     form.reset({
       nombre: existingProduct?.nombre || "",
       descripcion: existingProduct?.descripcion || "",
@@ -715,30 +948,34 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
       stock: existingProduct?.stock || 0,
       imagenFile: null, 
     });
+    // Set image preview from existing product or clear it
     setImagePreview(existingProduct?.principal_image_url || null); 
+    // Clear the file input visually if it exists
     if (fileInputRef.current) { 
-        fileInputRef.current.value = "";
+      fileInputRef.current.value = "";
     }
   }, [existingProduct, form]);
 
-
   const handleFormSubmit = async (values: ProductFormValues) => {
     setIsSubmittingProduct(true);
-    await onSubmit(values);
+    await onSubmit(values); // The parent component (ProductManagement) will handle dialog closing on success
     setIsSubmittingProduct(false);
+    // Do not call onClose here directly, let the parent decide based on submission success
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
+    
     if (file) {
-      form.setValue("imagenFile", event.target.files); 
+      form.setValue("imagenFile", event.target.files, { shouldValidate: true }); 
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     } else {
-      form.setValue("imagenFile", null);
+      form.setValue("imagenFile", null, { shouldValidate: true });
+      // Revert to existing image if no new file is chosen, or null if there was none
       setImagePreview(existingProduct?.principal_image_url || null); 
     }
   };
@@ -759,6 +996,7 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
             </FormItem>
           )}
         />
+        
         <FormField
           control={form.control}
           name="descripcion"
@@ -772,6 +1010,7 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
             </FormItem>
           )}
         />
+        
         <div className="flex gap-4">
           <FormField
             control={form.control}
@@ -780,12 +1019,19 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
               <FormItem className="flex-1">
                 <FormLabel>Precio (MXN)</FormLabel>
                 <FormControl>
-                  <Input type="number" step="0.01" placeholder="Ej: 250.00" {...field} />
+                  <Input 
+                    type="number" 
+                    step="0.01" 
+                    placeholder="Ej: 250.00" 
+                    {...field} 
+                    onChange={event => field.onChange(+event.target.value)}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
+          
           <FormField
             control={form.control}
             name="stock"
@@ -793,13 +1039,20 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
               <FormItem className="flex-1">
                 <FormLabel>Stock Disponible</FormLabel>
                 <FormControl>
-                  <Input type="number" step="1" placeholder="Ej: 10" {...field} />
+                  <Input 
+                    type="number" 
+                    step="1" 
+                    placeholder="Ej: 10" 
+                    {...field} 
+                    onChange={event => field.onChange(parseInt(event.target.value, 10) || 0)}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
+        
         <FormField
           control={form.control}
           name="imagenFile"
@@ -817,25 +1070,46 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
               </FormControl>
               {imagePreview && (
                 <div className="mt-2">
-                  <Image src={imagePreview} alt="Vista previa" width={100} height={100} className="rounded-md object-cover aspect-square border" data-ai-hint="preview product craft" />
+                  <Image 
+                    src={imagePreview} 
+                    alt="Vista previa" 
+                    width={100} 
+                    height={100} 
+                    className="rounded-md object-cover aspect-square border" 
+                    data-ai-hint="preview product craft" 
+                  />
                 </div>
               )}
               <FormDescription>
-                Sube una imagen para tu producto (máx. 5MB, formatos: JPG, PNG, WEBP). Si no subes una nueva, se conservará la actual (si existe).
+                Sube una imagen para tu producto (máx. 5MB, formatos: JPG, PNG, WEBP). 
+                Si no subes una nueva, se conservará la actual (si existe).
               </FormDescription>
               {fieldState.error && <FormMessage>{fieldState.error.message}</FormMessage>}
             </FormItem>
           )}
         />
+        
         <DialogFooter className="pt-4">
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSubmittingProduct}>
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={onClose} 
+            disabled={isSubmittingProduct}
+          >
             Cancelar
           </Button>
-          <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmittingProduct}>
+          <Button 
+            type="submit" 
+            className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+            disabled={isSubmittingProduct || !form.formState.isValid}
+          >
             {isSubmittingProduct ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : existingProduct ? <Edit3 className="mr-2 h-4 w-4" /> : <PackagePlus className="mr-2 h-4 w-4" />}
-            {isSubmittingProduct ? (existingProduct ? 'Guardando...' : 'Creando...') : (existingProduct ? "Guardar Cambios" : "Crear Producto")}
+            {isSubmittingProduct ? 
+              (existingProduct ? 'Guardando...' : 'Creando...') : 
+              (existingProduct ? "Guardar Cambios" : "Crear Producto")
+            }
           </Button>
         </DialogFooter>
       </form>
