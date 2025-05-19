@@ -4,12 +4,12 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { ArrowRight } from 'lucide-react';
-import { createServerClient } from '@supabase/ssr';
-import type { CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+// import { createServerClient } from '@supabase/ssr'; // Comentado temporalmente
+// import type { CookieOptions } from '@supabase/ssr'; // Comentado temporalmente
+// import { cookies } from 'next/headers'; // Comentado temporalmente
 import type { Tables, Database } from '@/lib/supabase/database.types';
 
-export const dynamic = 'force-dynamic'; // Asegura renderizado dinámico
+// export const dynamic = 'force-dynamic'; // Comentado temporalmente, reintroducir si es necesario
 
 // Type for products fetched from Supabase, including nested data
 type ProductFromSupabase = Tables<'productos'> & {
@@ -25,6 +25,7 @@ type ProductForDisplay = Tables<'productos'> & {
 
 type StoreForDisplay = Tables<'tiendas'>;
 
+/* Comentado temporalmente para evitar error de cookies
 async function getFeaturedProducts(supabase: ReturnType<typeof createServerClient<Database>>): Promise<ProductForDisplay[]> {
   const { data: productsData, error } = await supabase
     .from('productos')
@@ -68,8 +69,10 @@ async function getFeaturedStores(supabase: ReturnType<typeof createServerClient<
   }
   return storesData || [];
 }
+*/
 
 export default async function HomePage() {
+  /* Comentado temporalmente para evitar error de cookies
   const cookieStore = cookies();
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -77,12 +80,15 @@ export default async function HomePage() {
     {
       cookies: {
         get(name: string) {
+          // const cookieStore = cookies(); // Llamar a cookies() dentro de la función
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
+          // const cookieStore = cookies(); // Llamar a cookies() dentro de la función
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
+          // const cookieStore = cookies(); // Llamar a cookies() dentro de la función
           cookieStore.set({ name, value: '', ...options });
         },
       },
@@ -91,6 +97,12 @@ export default async function HomePage() {
 
   const products = await getFeaturedProducts(supabase);
   const stores = await getFeaturedStores(supabase);
+  */
+  
+  // Placeholder data until the cookie issue is resolved
+  const products: ProductForDisplay[] = [];
+  const stores: StoreForDisplay[] = [];
+
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -101,21 +113,9 @@ export default async function HomePage() {
               Bienvenido a Arbahua
             </h1>
             <p className="text-lg sm:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Descubre artesanías únicas hechas con pasión y apoya a talentosos creadores de nuestra comunidad.
+              Descubre artesanías únicas hechas con pasión y apoya a talentosos creadores de nuestra comunidad. Explora, inspírate y encuentra piezas que cuentan historias.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:scale-105">
-                <Link href="/register" className="flex items-center justify-center gap-2">
-                  ¡Únete Ahora!
-                  <ArrowRight className="h-5 w-5" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline" className="shadow-md hover:shadow-lg transition-shadow duration-300 border-primary text-primary hover:bg-primary/5 transform hover:scale-105">
-                <Link href="/login">
-                  Iniciar Sesión
-                </Link>
-              </Button>
-            </div>
+            {/* Los botones de acción principales ahora están en la Navbar */}
           </div>
         </header>
 
@@ -156,7 +156,7 @@ export default async function HomePage() {
                 ))}
               </div>
             ) : (
-              <p className="text-center text-muted-foreground py-10">No hay productos destacados en este momento. ¡Vuelve pronto!</p>
+              <p className="text-center text-muted-foreground py-10">Pronto encontrarás aquí nuestras creaciones más especiales. ¡Estamos trabajando en ello!</p>
             )}
           </div>
         </section>
@@ -199,7 +199,7 @@ export default async function HomePage() {
                 ))}
               </div>
             ) : (
-              <p className="text-center text-muted-foreground py-10">Pronto destacaremos a nuestros talentosos artesanos.</p>
+              <p className="text-center text-muted-foreground py-10">Nuestros artesanos estrella se están preparando. ¡Conócelos pronto!</p>
             )}
           </div>
         </section>
@@ -218,5 +218,3 @@ export default async function HomePage() {
     </div>
   );
 }
-
-    
