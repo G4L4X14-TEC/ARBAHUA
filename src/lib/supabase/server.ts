@@ -6,12 +6,23 @@ import type { Database } from '@/lib/supabase/database.types';
 export function createSupabaseServerClient() {
   const cookieStore = cookies();
 
-  // Ensure these environment variables are set in your Vercel project settings
-  // (and .env.local for local server-side development)
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  // Attempt to read server-specific (non-prefixed) first, then fall back to NEXT_PUBLIC_ prefixed
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  console.log('[SupabaseServerClient] Checking Environment Variables:');
+  console.log(`  process.env.SUPABASE_URL: ${process.env.SUPABASE_URL ? 'SET - ' + process.env.SUPABASE_URL.substring(0,20) + '...' : 'NOT SET'}`);
+  console.log(`  process.env.SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? 'SET - ' + process.env.SUPABASE_ANON_KEY.substring(0,10) + '...' : 'NOT SET'}`);
+  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL ? 'SET - ' + process.env.NEXT_PUBLIC_SUPABASE_URL.substring(0,20) + '...' : 'NOT SET'}`);
+  console.log(`  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY: ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET - ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.substring(0,10) + '...' : 'NOT SET'}`);
+  console.log(`  Resolved supabaseUrl for client: ${supabaseUrl ? supabaseUrl.substring(0,20) + '...' : 'UNDEFINED'}`);
+  console.log(`  Resolved supabaseAnonKey for client: ${supabaseAnonKey ? supabaseAnonKey.substring(0,10) + '...' : 'UNDEFINED'}`);
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    console.error(
+      `[SupabaseServerClient] CRITICAL ERROR: Supabase URL or Anon Key is missing before client creation. ` +
+      `Resolved URL: '${supabaseUrl || "MISSING"}' | Resolved Anon Key: '${supabaseAnonKey ? "PRESENT_BUT_WONT_LOG_VALUE" : "MISSING"}'`
+    );
     throw new Error(
       'Supabase URL and Anon Key are required for the server client. Check your environment variables.'
     );
@@ -26,22 +37,16 @@ export function createSupabaseServerClient() {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          // Server Components can only read cookies, not set them directly.
-          // For mutations or auth actions that set cookies, use Server Actions or Route Handlers.
-          // However, Supabase client needs this structure. For read-only in SC, it's fine.
-          // If you encounter issues with auth state in SC after login/logout,
-          // you might need to refresh or use a client-side router push.
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // In Server Components, setting cookies might be restricted.
-            // Supabase's SSR client is designed to handle this gracefully for reads.
+            // Server Components might not be able to set cookies.
             // console.log(`Note: Could not set cookie ${name} in Server Component context.`);
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value: '', ...options }); // Clearing cookie by setting empty value
+            cookieStore.set({ name, value: '', ...options });
           } catch (error) {
             // console.log(`Note: Could not remove cookie ${name} in Server Component context.`);
           }
