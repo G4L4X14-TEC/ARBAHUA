@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'aqcmdxuxkolbzmfljcxx.supabase.co', // Por favor, verifica que este sea tu ID de proyecto Supabase
+        hostname: 'aqcmdxuxkolbzmfljcxx.supabase.co', // POR FAVOR, VERIFICA QUE ESTE SEA TU ID DE PROYECTO SUPABASE
         port: '',
         pathname: '/storage/v1/object/public/**',
       },
