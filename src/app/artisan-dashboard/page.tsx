@@ -94,11 +94,11 @@ const productFormSchema = z.object({
     .nullable()
     .refine(
       (files) => !files || files.length === 0 || files[0].size <= MAX_FILE_SIZE,
-      'El tamaño máximo de la imagen es 5MB.' // Usar comillas simples
+      'El tamaño máximo de la imagen es 5MB.' 
     )
     .refine(
       (files) => !files || files.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files[0].type),
-      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp." // Comillas dobles está bien aquí
+      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp."
     ),
 });
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -148,7 +148,7 @@ export default function ArtisanDashboardPage() {
           description: "No se pudo cargar tu perfil de artesano. Intenta iniciar sesión de nuevo.", 
           variant: "destructive" 
         });
-        await supabase.auth.signOut();
+        await supabase.auth.signOut(); // Sign out if profile is crucial and missing
         router.push("/login");
         return;
       }
@@ -178,7 +178,7 @@ export default function ArtisanDashboardPage() {
       .from("tiendas")
       .select("*")
       .eq("artesano_id", artisanProfile.id)
-      .maybeSingle(); // Use maybeSingle to handle null if no store exists
+      .maybeSingle(); 
     
     if (storeError) {
       toast({ 
@@ -188,7 +188,7 @@ export default function ArtisanDashboardPage() {
       });
       setStore(null);
     } else {
-      setStore(storeData); // storeData can be null here if no store is found
+      setStore(storeData); 
       if (!storeData) {
         setShowCreateEditStoreForm(true);
       } else {
@@ -279,7 +279,7 @@ export default function ArtisanDashboardPage() {
             artisanId={artisanProfile.id}
             existingStore={store}
             onSuccess={handleStoreCreatedOrUpdated}
-            onCancel={() => store && setShowCreateEditStoreForm(false)} // Only show cancel if there's an existing store to go back to
+            onCancel={() => store && setShowCreateEditStoreForm(false)} 
           />
         ) : (
           <StoreDisplay
@@ -327,7 +327,7 @@ function CreateEditStoreForm({
       let resultStore: Tables<'tiendas'> | null = null;
       const storePayload: Partial<TablesUpdate<'tiendas'>> = { 
         nombre: values.nombre,
-        descripcion: values.descripcion || null, // Ensure null if empty
+        descripcion: values.descripcion || null,
       };
 
       if (existingStore?.id) { 
@@ -335,7 +335,7 @@ function CreateEditStoreForm({
           .from("tiendas")
           .update(storePayload)
           .eq("id", existingStore.id)
-          .eq("artesano_id", artisanId) // Ensure only owner can update
+          .eq("artesano_id", artisanId)
           .select()
           .single();
         if (error) throw error;
@@ -529,7 +529,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       setProducts([]);
     } else {
       console.log("[ProductManagement] Fetched products data:", productsData);
-      const productsWithImages = (productsData || []).map(p => { // Ensure productsData is an array
+      const productsWithImages = (productsData || []).map(p => { 
         const imagesArray = (p.imagenes_productos || []) as unknown as Tables<'imagenes_productos'>[];
         const principalImage = imagesArray.find(img => img.es_principal === true);
         return {
@@ -644,7 +644,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         precio: values.precio,
         stock: values.stock,
         tienda_id: storeId,
-        estado: 'activo', // Default state
+        estado: 'activo', 
       };
       
       let productResult;
@@ -683,7 +683,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       console.log(\`[ProductManagement] Product \${editingProduct ? 'updated' : 'inserted'} successfully: ID \${productId}\`);
       
       const imageFile = values.imagenFile?.[0];
-      if (imageFile) {
+      if (imageFile && productId) { // Ensure productId is available
         console.log("[ProductManagement] Image file present. Uploading for productId:", productId, "File:", imageFile.name);
         const fileName = \`\${Date.now()}_\${imageFile.name.replace(/\s+/g, '_')}\`;
         const filePath = \`\${productId}/\${fileName}\`; 
@@ -701,12 +701,14 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         console.log("[ProductManagement] Image uploaded to storage for productId:", productId);
         
         const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(filePath);
-        if (!publicUrlData?.publicUrl) {
+        const newImageUrl = publicUrlData?.publicUrl;
+
+        if (!newImageUrl) {
           console.error("[ProductManagement] Could not get public URL for image path:", filePath);
+          // Attempt to remove the uploaded file if DB operation might fail
           await supabase.storage.from('product-images').remove([filePath]);
-          throw new Error("No se pudo obtener la URL pública de la imagen.");
+          throw new Error("No se pudo obtener la URL pública de la imagen después de subirla.");
         }
-        const newImageUrl = publicUrlData.publicUrl;
         console.log("[ProductManagement] Public URL obtained:", newImageUrl);
         
         console.log("[ProductManagement] Setting other images for product", productId, "to not principal.");
@@ -724,7 +726,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         console.log("[ProductManagement] Inserting new image record into DB for product:", productId);
         const { error: imageDbError } = await supabase
           .from('imagenes_productos')
-          .insert({ // Changed from upsert to insert
+          .insert({ 
             producto_id: productId,
             url: newImageUrl,
             file_path: filePath,
@@ -1110,4 +1112,6 @@ function ProductFormDialog({
     </Form>
   );
 }
+    
+
     
