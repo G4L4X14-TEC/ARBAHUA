@@ -402,13 +402,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
     setIsLoadingProducts(true);
     const { data: productsData, error } = await supabase
       .from('productos')
-      .select(\`
-        *,
-        imagenes_productos (
-          url,
-          es_principal
-        )
-      \`)
+      .select('*, imagenes_productos(url, es_principal)')
       .eq('tienda_id', storeId)
       .order('nombre', { ascending: true });
 
@@ -644,7 +638,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
                     />
                   </TableCell>
                   <TableCell className="font-medium">{product.nombre}</TableCell>
-                  <TableCell className="text-right">${product.precio.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}</TableCell>
                   <TableCell className="text-right">{product.stock}</TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button variant="outline" size="sm" onClick={() => handleEditProduct(product)}>
@@ -838,7 +832,7 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
               </FormControl>
               {imagePreview && (
                 <div className="mt-2">
-                  <Image src={imagePreview} alt="Vista previa" width={100} height={100} className="rounded-md object-cover aspect-square border" />
+                  <Image src={imagePreview} alt="Vista previa" width={100} height={100} className="rounded-md object-cover aspect-square border" data-ai-hint="preview product craft" />
                 </div>
               )}
               <FormDescription>
@@ -855,13 +849,11 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
           <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmittingProduct}>
             {isSubmittingProduct ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : existingProduct ? <Edit3 className="mr-2 h-4 w-4" /> : <PackagePlus className="mr-2 h-4 w-4" />}
-            {isSubmittingProduct ? (existingProduct ? 'Guardando...' : 'Creando...') : (existingProduct ? "Guardar Cambios" : "Crear Producto")}
+            ) : editingProduct ? <Edit3 className="mr-2 h-4 w-4" /> : <PackagePlus className="mr-2 h-4 w-4" />}
+            {isSubmittingProduct ? (editingProduct ? 'Guardando...' : 'Creando...') : (existingProduct ? "Guardar Cambios" : "Crear Producto")}
           </Button>
         </DialogFooter>
       </form>
     </Form>
   );
 }
-
-    
