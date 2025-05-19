@@ -55,8 +55,8 @@ export default function FeaturedStoresClient() {
           <Link href={`/store/${store.id}`} className="block group h-full flex flex-col">
             <div className="relative w-full h-48 sm:h-52"> {/* Ajuste de altura para tiendas */}
               <Image
-                src={store.logo_url || \`https://placehold.co/400x200.png?text=\${encodeURIComponent(store.nombre)}\`}
-                alt={\`Logo de \${store.nombre}\`}
+                src={store.logo_url || `https://placehold.co/400x200.png?text=${encodeURIComponent(store.nombre)}`}
+                alt={`Logo de ${store.nombre}`}
                 fill
                 sizes="(max-width: 768px) 100vw, 33vw"
                 style={{ objectFit: 'cover' }}
