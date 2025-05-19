@@ -10,8 +10,8 @@ const fontSans = FontSans({
 })
 
 export const metadata: Metadata = {
-  title: 'CraftConnect Register',
-  description: 'Register to connect with artisans and buyers.',
+  title: 'Arbahua - Conecta con Artesanos',
+  description: 'Arbahua: Tu marketplace para descubrir y vender artesanías únicas.',
 };
 
 export default function RootLayout({

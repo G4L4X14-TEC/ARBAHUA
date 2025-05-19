@@ -29,7 +29,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Mail, Lock, User, Briefcase } from "lucide-react";
 
 const formSchema = z.object({
-  fullName: z.string().min(2, { message: "El nombre completo debe tener al menos 2 caracteres." }),
+  nombre: z.string().min(2, { message: "El nombre completo debe tener al menos 2 caracteres." }),
   email: z.string().email({ message: "Por favor, introduce un email válido." }),
   password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
   confirmPassword: z.string(),
@@ -50,7 +50,7 @@ export function RegisterForm() {
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      fullName: "",
+      nombre: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -61,13 +61,13 @@ export function RegisterForm() {
   async function onSubmit(values: RegisterFormValues) {
     setIsLoading(true);
     try {
-      const { error }_ = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
           data: {
-            full_name: values.fullName,
-            role: values.role,
+            nombre: values.nombre, // Changed from full_name to nombre
+            rol: values.role,
           },
         },
       });
@@ -78,14 +78,14 @@ export function RegisterForm() {
 
       toast({
         title: "¡Registro Exitoso!",
-        description: "Tu cuenta ha sido creada. Revisa tu email para confirmar.", // Default Supabase behavior
+        description: "Tu cuenta ha sido creada. Revisa tu email para confirmar.", 
       });
 
       // Role-based redirection
       if (values.role === "artesano") {
         router.push("/artisan-dashboard");
       } else {
-        router.push("/");
+        router.push("/"); // Redirect to HomePage for 'cliente'
       }
 
     } catch (error: any) {
@@ -102,7 +102,7 @@ export function RegisterForm() {
   return (
     <Card className="w-full max-w-md shadow-xl bg-card">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center text-primary">Regístrate en CraftConnect</CardTitle>
+        <CardTitle className="text-2xl font-bold text-center text-primary">Regístrate en Arbahua</CardTitle>
         <CardDescription className="text-center text-muted-foreground">
           Crea tu cuenta para empezar a explorar o vender artesanías.
         </CardDescription>
@@ -112,7 +112,7 @@ export function RegisterForm() {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
-              name="fullName"
+              name="nombre"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nombre completo</FormLabel>
@@ -179,7 +179,7 @@ export function RegisterForm() {
               name="role"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Rol</FormLabel>
+                  <FormLabel>Quiero ser</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <div className="relative">
@@ -199,7 +199,7 @@ export function RegisterForm() {
               )}
             />
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
-              {isLoading ? "Registrando..." : "Registrarse"}
+              {isLoading ? "Registrando..." : "Crear Cuenta"}
             </Button>
           </form>
         </Form>
