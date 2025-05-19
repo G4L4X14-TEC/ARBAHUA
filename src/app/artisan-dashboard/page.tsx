@@ -94,11 +94,11 @@ const productFormSchema = z.object({
     .nullable()
     .refine(
       (files) => !files || files.length === 0 || files[0].size <= MAX_FILE_SIZE,
-      'El tamaño máximo de la imagen es 5MB.' // CORREGIDO: Usar comillas simples
+      'El tamaño máximo de la imagen es 5MB.'
     )
     .refine(
       (files) => !files || files.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files[0].type),
-      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp." // Comillas dobles también está bien
+      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp."
     ),
 });
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -288,8 +288,8 @@ export default function ArtisanDashboardPage() {
           />
         )}
 
-        {store && !showCreateEditStoreForm && (
-          <ProductManagement storeId={store.id} />
+        {store && !showCreateEditStoreForm && artisanProfile && (
+          <ProductManagement storeId={store.id} artisanId={artisanProfile.id} />
         )}
       </div>
     </main>
@@ -497,9 +497,10 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
 
 interface ProductManagementProps {
   storeId: string;
+  artisanId: string; // Nueva prop para el ID del artesano
 }
 
-function ProductManagement({ storeId }: ProductManagementProps) {
+function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const [products, setProducts] = useState<ProductWithPrincipalImage[]>([]);
@@ -566,7 +567,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
     console.log("[ProductManagement] Confirming delete for product:", productToDelete.id, productToDelete.nombre);
     
     try {
-      // 1. Get image file_paths to delete from storage
       const { data: imagesToDelete, error: imagesError } = await supabase
         .from('imagenes_productos')
         .select('file_path')
@@ -574,14 +574,12 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       
       if (imagesError) {
         console.warn("[ProductManagement] Error fetching image paths for deletion:", imagesError.message);
-        // Continue deletion even if image paths can't be fetched, to remove DB records
       }
       
-      // 2. Delete files from storage if paths were found
       if (imagesToDelete && imagesToDelete.length > 0) {
         const filePaths = imagesToDelete
           .map(img => img.file_path)
-          .filter(path => path !== null) as string[]; 
+          .filter(path => typeof path === 'string' && path.trim() !== '') as string[]; // Asegurar que file_path no sea null o vacío
         
         if (filePaths.length > 0) {
           console.log("[ProductManagement] Deleting files from storage:", filePaths);
@@ -592,10 +590,13 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           } else {
             console.log("[ProductManagement] Files deleted from storage successfully for product:", productToDelete.id);
           }
+        } else {
+          console.log("[ProductManagement] No valid file paths found in DB for deletion from storage for product:", productToDelete.id);
         }
+      } else {
+        console.log("[ProductManagement] No image records found in DB for product:", productToDelete.id);
       }
       
-      // 3. Delete image records from DB
       console.log("[ProductManagement] Deleting image records from DB for product:", productToDelete.id);
       const { error: deleteImageDbError } = await supabase
         .from('imagenes_productos')
@@ -609,7 +610,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         console.log("[ProductManagement] Image records deleted from DB for product:", productToDelete.id);
       }
 
-      // 4. Delete product from DB
       console.log("[ProductManagement] Deleting product from DB:", productToDelete.id);
       const { error: deleteProductError } = await supabase
         .from('productos')
@@ -638,12 +638,11 @@ function ProductManagement({ storeId }: ProductManagementProps) {
   };
 
   const onProductSubmit = async (values: ProductFormValues) => {
-    console.log("[ProductManagement] Submitting product form. Editing product ID:", editingProduct?.id, "Values:", values);
+    console.log(`[ProductManagement] Submitting product form. Artisan ID: ${artisanId}, Store ID: ${storeId}, Editing product ID: ${editingProduct?.id}`, "Values:", values);
     let productId = editingProduct?.id;
     let productUpdatedOrCreated = false;
 
     try {
-      // Step 1: Create or Update product textual data
       const productPayload: Partial<TablesUpdate<'productos'> | TablesInsert<'productos'>> = {
         nombre: values.nombre,
         descripcion: values.descripcion || null,
@@ -681,22 +680,24 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         console.error("[ProductManagement] Product ID not found after create/update.");
         throw new Error("No se pudo obtener el ID del producto después de guardarlo.");
       }
-      productUpdatedOrCreated = true;
+      productUpdatedOrCreated = true; // Marcamos como exitoso aquí
+      // El toast de éxito del producto se moverá después de la lógica de la imagen
+      // para dar un solo mensaje de éxito general si todo va bien.
       console.log(`[ProductManagement] Product ${editingProduct ? 'updated' : 'inserted'} successfully: ID ${productId}`);
       
-      // Step 2: Handle image upload if a file is present
       const imageFile = values.imagenFile?.[0];
       if (imageFile && productId) {
         console.log("[ProductManagement] Image file present. Uploading for productId:", productId, "File:", imageFile.name);
+        // Nueva estructura de path: artisanId/productId/fileName
         const fileName = `${Date.now()}_${imageFile.name.replace(/\s+/g, '_')}`;
-        const filePath = `${productId}/${fileName}`; 
+        const filePath = `${artisanId}/${productId}/${fileName}`; 
         
         console.log("[ProductManagement] Uploading image to path:", filePath);
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('product-images')
           .upload(filePath, imageFile, {
             cacheControl: '3600',
-            upsert: false, // Use false to avoid overwriting if file path somehow collides, though timestamp should prevent this
+            upsert: false, 
         }); 
           
         if (uploadError) {
@@ -710,12 +711,11 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
         if (!newImageUrl) {
           console.error("[ProductManagement] Could not get public URL for image path:", filePath);
-          await supabase.storage.from('product-images').remove([filePath]); // Attempt to remove uploaded file
+          await supabase.storage.from('product-images').remove([filePath]);
           throw new Error("No se pudo obtener la URL pública de la imagen después de subirla.");
         }
         console.log("[ProductManagement] Public URL obtained:", newImageUrl);
         
-        // Step 3: Set other images for this product to not be principal
         console.log("[ProductManagement] Setting other images for product", productId, "to not principal.");
         const { error: updateOldImagesError } = await supabase
           .from('imagenes_productos')
@@ -724,23 +724,19 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
         if (updateOldImagesError){
           console.warn("[ProductManagement] Error updating old images to not principal:", updateOldImagesError.message);
-          // Not throwing error here, as the main image insert is more critical
         } else {
           console.log("[ProductManagement] Successfully set old images to not principal for product:", productId);
         }
           
-        // Step 4: Insert new image record into DB
         console.log("[ProductManagement] Inserting new image record into DB for product:", productId);
         const { data: newImageRecord, error: imageDbError } = await supabase
           .from('imagenes_productos')
           .insert({ 
             producto_id: productId,
             url: newImageUrl,
-            file_path: filePath, // Save the file_path for future deletions
+            file_path: filePath, 
             es_principal: true,
-          })
-          .select()
-          .single();
+          });
           
         if (imageDbError) {
           console.error("[ProductManagement] Error inserting image record into DB:", imageDbError);
@@ -749,22 +745,18 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           throw new Error(`Error al guardar la información de la imagen: ${imageDbError.message}`);
         }
         console.log("[ProductManagement] Image record inserted into DB successfully for productId:", productId, "New image record:", newImageRecord);
-        toast({ 
-          title: "Imagen Subida", 
-          description: "La imagen principal del producto ha sido actualizada."
-        });
+        // El toast de imagen subida se puede integrar en el toast general de éxito.
       }
       
-      // If product was created/updated successfully (even if image part was skipped or failed but didn't throw)
       if (productUpdatedOrCreated) {
          toast({ 
           title: editingProduct ? "Producto Actualizado" : "Producto Creado", 
-          description: `"${productResult.data?.nombre}" ha sido ${editingProduct ? 'actualizado' : 'añadido'}.`
+          description: `"${productResult.data?.nombre}" ha sido ${editingProduct ? 'actualizado' : 'añadido'} ${imageFile ? 'con su imagen principal' : ''}.`
         });
         setIsProductDialogOpen(false);
         setEditingProduct(null);
         console.log("[ProductManagement] Product operation successful, fetching updated product list.");
-        fetchProducts(); // Refresh product list
+        fetchProducts(); 
       }
 
     } catch (error: any) {
@@ -774,7 +766,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         description: error.message || "Ocurrió un problema inesperado.",
         variant: "destructive",
       });
-      // Do not close dialog or refresh list on critical error
     }
   };
 
@@ -961,8 +952,6 @@ function ProductFormDialog({
   const handleFormSubmit = async (values: ProductFormValues) => {
     setIsSubmittingProduct(true);
     await onSubmit(values); 
-    // No cierres el diálogo ni resetees el formulario aquí.
-    // La función onSubmit del padre (ProductManagement) lo hará si todo es exitoso.
     setIsSubmittingProduct(false);
   };
 
@@ -1131,4 +1120,4 @@ function ProductFormDialog({
 }
     
 
-    
+    ```Este es el codigo donde se guardan las imagenes y el cual me arroja el error, puedes corregirlo y generar el xml de este cambio
