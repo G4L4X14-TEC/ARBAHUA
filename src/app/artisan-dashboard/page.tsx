@@ -209,7 +209,7 @@ export default function ArtisanDashboardPage() {
     setShowCreateEditStoreForm(false);
     toast({ 
       title: store?.id ? "Tienda Actualizada" : "Tienda Creada", 
-      description: `Tu tienda "${updatedStore.nombre}" ha sido ${store?.id ? 'actualizada' : 'creada'} con éxito.`
+      description: \`Tu tienda "\${updatedStore.nombre}" ha sido \${store?.id ? 'actualizada' : 'creada'} con éxito.\`
     });
   };
 
@@ -361,7 +361,7 @@ function CreateEditStoreForm({
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: `Error al ${existingStore?.id ? 'actualizar' : 'crear'} la tienda`,
+        title: \`Error al \${existingStore?.id ? 'actualizar' : 'crear'} la tienda\`,
         description: error.message || "Ocurrió un problema. Inténtalo de nuevo.",
       });
     } finally {
@@ -471,7 +471,7 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         <Image
           data-ai-hint="crafts store logo"
           src={store.logo_url || "https://placehold.co/300x200.png"}
-          alt={`Logo de ${store.nombre}`}
+          alt={\`Logo de \${store.nombre}\`}
           width={300}
           height={200}
           className="rounded-md object-cover h-40 w-full sm:w-auto sm:h-32 aspect-video mb-4 border"
@@ -482,11 +482,11 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         </p>
         <p className="text-sm">
           Estado: 
-          <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${
+          <span className={\`font-semibold px-2 py-0.5 rounded-full text-xs \${
             store.estado === 'activa' 
               ? 'bg-green-100 text-green-700' 
               : 'bg-red-100 text-red-700'
-          }`}>
+          }\`}>
             {store.estado}
           </span>
         </p>
@@ -497,7 +497,7 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
 
 interface ProductManagementProps {
   storeId: string;
-  artisanId: string; // Nueva prop para el ID del artesano
+  artisanId: string; 
 }
 
 function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
@@ -579,14 +579,14 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
       if (imagesToDelete && imagesToDelete.length > 0) {
         const filePaths = imagesToDelete
           .map(img => img.file_path)
-          .filter(path => typeof path === 'string' && path.trim() !== '') as string[]; // Asegurar que file_path no sea null o vacío
+          .filter(path => typeof path === 'string' && path.trim() !== '') as string[]; 
         
         if (filePaths.length > 0) {
           console.log("[ProductManagement] Deleting files from storage:", filePaths);
           const { error: storageError } = await supabase.storage.from('product-images').remove(filePaths);
           if (storageError) {
             console.warn("[ProductManagement] Error deleting files from storage:", storageError.message);
-            toast({ title: "Advertencia", description: `No se pudieron eliminar algunos archivos de imagen: ${storageError.message}`, variant: "destructive" });
+            toast({ title: "Advertencia", description: \`No se pudieron eliminar algunos archivos de imagen: \${storageError.message}\`, variant: "destructive" });
           } else {
             console.log("[ProductManagement] Files deleted from storage successfully for product:", productToDelete.id);
           }
@@ -605,7 +605,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
 
       if (deleteImageDbError) {
         console.warn("[ProductManagement] Error deleting image records from DB:", deleteImageDbError.message);
-        toast({ title: "Advertencia", description: `No se pudieron eliminar los registros de imágenes: ${deleteImageDbError.message}`, variant: "destructive" });
+        toast({ title: "Advertencia", description: \`No se pudieron eliminar los registros de imágenes: \${deleteImageDbError.message}\`, variant: "destructive" });
       } else {
         console.log("[ProductManagement] Image records deleted from DB for product:", productToDelete.id);
       }
@@ -620,7 +620,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
       
       toast({ 
         title: "Producto Eliminado", 
-        description: `"${productToDelete.nombre}" ha sido eliminado.`
+        description: \`"\${productToDelete.nombre}" ha sido eliminado.\`
       });
       console.log("[ProductManagement] Product deleted successfully, fetching updated products list.");
       fetchProducts(); 
@@ -638,7 +638,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
   };
 
   const onProductSubmit = async (values: ProductFormValues) => {
-    console.log(`[ProductManagement] Submitting product form. Artisan ID: ${artisanId}, Store ID: ${storeId}, Editing product ID: ${editingProduct?.id}`, "Values:", values);
+    console.log(\`[ProductManagement] Submitting product form. Artisan ID: \${artisanId}, Store ID: \${storeId}, Editing product ID: \${editingProduct?.id}\`, "Values:", values);
     let productId = editingProduct?.id;
     let productUpdatedOrCreated = false;
 
@@ -680,17 +680,14 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
         console.error("[ProductManagement] Product ID not found after create/update.");
         throw new Error("No se pudo obtener el ID del producto después de guardarlo.");
       }
-      productUpdatedOrCreated = true; // Marcamos como exitoso aquí
-      // El toast de éxito del producto se moverá después de la lógica de la imagen
-      // para dar un solo mensaje de éxito general si todo va bien.
-      console.log(`[ProductManagement] Product ${editingProduct ? 'updated' : 'inserted'} successfully: ID ${productId}`);
+      productUpdatedOrCreated = true; 
+      console.log(\`[ProductManagement] Product \${editingProduct ? 'updated' : 'inserted'} successfully: ID \${productId}\`);
       
       const imageFile = values.imagenFile?.[0];
       if (imageFile && productId) {
         console.log("[ProductManagement] Image file present. Uploading for productId:", productId, "File:", imageFile.name);
-        // Nueva estructura de path: artisanId/productId/fileName
-        const fileName = `${Date.now()}_${imageFile.name.replace(/\s+/g, '_')}`;
-        const filePath = `${artisanId}/${productId}/${fileName}`; 
+        const fileName = \`\${Date.now()}_\${imageFile.name.replace(/\s+/g, '_')}\`;
+        const filePath = \`\${artisanId}/\${productId}/\${fileName}\`; 
         
         console.log("[ProductManagement] Uploading image to path:", filePath);
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -739,19 +736,18 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
           });
           
         if (imageDbError) {
-          console.error("[ProductManagement] Error inserting image record into DB:", imageDbError);
+          console.error("[ProductManagement] Error inserting image record into DB:", imageDbError.message);
           console.warn("[ProductManagement] Attempting to remove uploaded file from storage due to DB error:", filePath);
           await supabase.storage.from('product-images').remove([filePath]); 
-          throw new Error(`Error al guardar la información de la imagen: ${imageDbError.message}`);
+          throw new Error(\`Error al guardar la información de la imagen: \${imageDbError.message}\`);
         }
         console.log("[ProductManagement] Image record inserted into DB successfully for productId:", productId, "New image record:", newImageRecord);
-        // El toast de imagen subida se puede integrar en el toast general de éxito.
       }
       
       if (productUpdatedOrCreated) {
          toast({ 
           title: editingProduct ? "Producto Actualizado" : "Producto Creado", 
-          description: `"${productResult.data?.nombre}" ha sido ${editingProduct ? 'actualizado' : 'añadido'} ${imageFile ? 'con su imagen principal' : ''}.`
+          description: \`"\${productResult.data?.nombre}" ha sido \${editingProduct ? 'actualizado' : 'añadido'} \${imageFile ? 'con su imagen principal' : ''}.\`
         });
         setIsProductDialogOpen(false);
         setEditingProduct(null);
@@ -826,7 +822,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
                   </TableCell>
                   <TableCell className="font-medium">{product.nombre}</TableCell>
                   <TableCell className="text-right">
-                    MXN${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}
+                    MXN\${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}
                   </TableCell>
                   <TableCell className="text-right">{product.stock}</TableCell>
                   <TableCell className="text-right space-x-2">
@@ -877,7 +873,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
             </AlertDialogTitle>
             <AlertDialogDescription>
               Esta acción no se puede deshacer. Se eliminará permanentemente el producto 
-              "${productToDelete?.nombre}" y todas sus imágenes asociadas de tu tienda.
+              "\${productToDelete?.nombre}" y todas sus imágenes asociadas de tu tienda.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1120,4 +1116,4 @@ function ProductFormDialog({
 }
     
 
-    ```Este es el codigo donde se guardan las imagenes y el cual me arroja el error, puedes corregirlo y generar el xml de este cambio
+    me parece que este es el codigo que esta bien o no?
