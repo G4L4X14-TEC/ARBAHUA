@@ -1,30 +1,4 @@
-
-import type {NextConfig} from 'next';
-
-const nextConfig: NextConfig = {
-  /* config options here */
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'aqcmdxuxkolbzmfljcxx.supabase.co', // Asegúrate que este sea tu ID de proyecto Supabase
-        port: '',
-        pathname: '/storage/v1/object/public/**',
-      },
-    ],
-  },
-};
-
-export default nextConfig;
+// DELETE THIS FILE
+// This file should be deleted as next.config.ts is now being used.
+// Leaving this content as a placeholder for the delete operation if the tool doesn't support direct deletion,
+// otherwise, the instruction is to remove this file from the project.
