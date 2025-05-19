@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image"; // Import next/image
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
@@ -17,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { HandMetal, ShoppingCart, UserCircle, LogOut, Store, Search, Info, Contact, Home } from "lucide-react";
+import { ShoppingCart, UserCircle, LogOut, Store, Search, Contact as ContactIcon, Home, Menu as MenuIcon } from "lucide-react"; // Renamed Contact to ContactIcon to avoid conflict
 
 // Helper para obtener iniciales del nombre
 const getInitials = (name: string | undefined) => {
@@ -71,7 +72,7 @@ export default function Navbar() {
           setUser(null);
           setUserProfile(null);
         }
-        setIsLoading(false);
+        setIsLoading(false); // Ensure loading is set to false after state change
       }
     );
 
@@ -85,7 +86,7 @@ export default function Navbar() {
     setUser(null);
     setUserProfile(null);
     router.push("/");
-    router.refresh(); // Forzar refresco para asegurar que la UI se actualice en Server Components
+    router.refresh(); 
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
   };
   
@@ -96,7 +97,7 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 w-full border-b bg-card text-card-foreground shadow-sm">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
         <Link href="/" className="flex items-center gap-2 transition-transform hover:scale-105">
-          <HandMetal className="h-7 w-7 text-primary" />
+          <Image src="/favicon.svg" alt="Arbahua logo" width={28} height={28} className="h-7 w-7" />
           <span className="text-2xl font-bold text-primary">Arbahua</span>
         </Link>
 
@@ -117,14 +118,12 @@ export default function Navbar() {
           )}
 
           {isLoading ? (
-            <div className="h-8 w-24 animate-pulse rounded-md bg-muted"></div>
+            <div className="h-9 w-9 animate-pulse rounded-full bg-muted"></div>
           ) : user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 focus-visible:ring-primary">
                   <Avatar className="h-9 w-9 border border-primary/50">
-                    {/* Podrías añadir una imagen de perfil aquí si la tuvieras */}
-                    {/* <AvatarImage src="user-profile-image.jpg" alt={userName || 'Usuario'} /> */}
                     <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                       {getInitials(userName)}
                     </AvatarFallback>
@@ -147,7 +146,7 @@ export default function Navbar() {
                     <span>Mi Panel de Artesano</span>
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={() => router.push(userRole === 'artesano' ? '/artisan-profile' : '/user-profile')}> {/* Ajustar ruta perfil artesano */}
+                <DropdownMenuItem onClick={() => router.push('/user-profile')}> 
                   <UserCircle className="mr-2 h-4 w-4" />
                   <span>Mi Perfil</span>
                 </DropdownMenuItem>
@@ -173,7 +172,7 @@ export default function Navbar() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+                  <MenuIcon className="h-6 w-6" />
                   <span className="sr-only">Abrir menú</span>
                 </Button>
               </DropdownMenuTrigger>
@@ -181,7 +180,46 @@ export default function Navbar() {
                 <DropdownMenuItem onClick={() => router.push('/')}><Home className="mr-2 h-4 w-4" />Inicio</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/search')}><Search className="mr-2 h-4 w-4" />Productos</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => router.push('/stores')}><Store className="mr-2 h-4 w-4" />Artesanos</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => router.push('/contact')}><Contact className="mr-2 h-4 w-4" />Contacto</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/contact')}><ContactIcon className="mr-2 h-4 w-4" />Contacto</DropdownMenuItem>
+                 {/* Opciones de usuario para móvil si está logueado */}
+                 {user && (
+                  <>
+                    <DropdownMenuSeparator />
+                     {userRole === "artesano" && (
+                      <DropdownMenuItem onClick={() => router.push("/artisan-dashboard")}>
+                        <Store className="mr-2 h-4 w-4" />
+                        <span>Panel Artesano</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => router.push('/user-profile')}>
+                      <UserCircle className="mr-2 h-4 w-4" />
+                      <span>Mi Perfil</span>
+                    </DropdownMenuItem>
+                     <DropdownMenuItem onClick={() => router.push('/cart')}>
+                        <ShoppingCart className="mr-2 h-4 w-4" />
+                        <span>Carrito</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      <span>Cerrar Sesión</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                 {/* Opciones para registrarse/iniciar sesión si no está logueado */}
+                {!user && !isLoading && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => router.push('/login')}>
+                      {/* Podrías añadir un ícono de LogIn si quieres */}
+                      Iniciar Sesión
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/register')}>
+                      {/* Podrías añadir un ícono de UserPlus si quieres */}
+                      Regístrate
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -196,8 +234,7 @@ interface NavLinkProps extends React.ComponentProps<typeof Link> {
 }
 
 function NavLink({ href, children, ...props }: NavLinkProps) {
-  const router = useRouter(); // Incorrecto usar useRouter para verificar active path en Server Component, pero aquí es Client
-  // Para una Navbar más compleja con estado activo, se necesitaría usePathname de next/navigation
+  // const router = useRouter(); // Para estado activo, se necesitaría usePathname
   // const pathname = usePathname();
   // const isActive = pathname === href;
 
@@ -215,5 +252,3 @@ function NavLink({ href, children, ...props }: NavLinkProps) {
     </Link>
   );
 }
-
-    
