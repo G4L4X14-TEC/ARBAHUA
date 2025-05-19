@@ -21,9 +21,9 @@ export default function FeaturedStoresClient() {
         setError(null);
         const fetchedStores = await getFeaturedStoresAction();
         setStores(fetchedStores);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Client error fetching stores:", err);
-        setError("No se pudieron cargar los artesanos destacados.");
+        setError(err.message || "No se pudieron cargar los artesanos destacados.");
       } finally {
         setIsLoading(false);
       }
@@ -55,8 +55,8 @@ export default function FeaturedStoresClient() {
           <Link href={`/store/${store.id}`} className="block group h-full flex flex-col">
             <div className="relative w-full h-52 sm:h-60">
               <Image
-                src={store.logo_url || \`https://placehold.co/400x200.png?text=\${encodeURIComponent(store.nombre)}\`}
-                alt={\`Logo de \${store.nombre}\`}
+                src={store.logo_url || `https://placehold.co/400x200.png?text=${encodeURIComponent(store.nombre)}`}
+                alt={`Logo de ${store.nombre}`}
                 fill
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 style={{ objectFit: 'cover' }}
@@ -72,8 +72,8 @@ export default function FeaturedStoresClient() {
                 </CardDescription>
               )}
             </CardHeader>
-            <CardFooter className="p-4 pt-2">
-              <Button variant="link" className="p-0 h-auto text-primary">
+            <CardFooter className="p-4 pt-2 mt-auto"> {/* Added mt-auto to push footer down */}
+              <Button variant="link" className="p-0 h-auto text-primary group-hover:underline">
                 Ver Tienda <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </CardFooter>
