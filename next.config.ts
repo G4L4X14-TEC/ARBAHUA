@@ -19,7 +19,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'aqcmdxuxkolbzmfljcxx.supabase.co', // POR FAVOR, VERIFICA QUE ESTE SEA TU ID DE PROYECTO SUPABASE
+        hostname: 'aqcmdxuxkolbzmfljcxx.supabase.co', // ESTE ES EL HOSTNAME DE TU ERROR
         port: '',
         pathname: '/storage/v1/object/public/**',
       },
