@@ -8,8 +8,8 @@ export default function SearchPage({
 }: { 
   searchParams?: { [key: string]: string | string[] | undefined } 
 }) {
-  const initialSearchTerm = typeof searchParams?.q === 'string' ? searchParams.q : null;
-  const initialCategoryId = typeof searchParams?.category === 'string' ? searchParams.category : null;
+  const initialSearchTerm = typeof searchParams?.q === 'string' ? searchParams.q : undefined;
+  const initialCategoryId = typeof searchParams?.category === 'string' ? searchParams.category : undefined;
 
   return (
     <SearchPageClient 
