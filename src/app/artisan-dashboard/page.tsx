@@ -93,11 +93,11 @@ const productFormSchema = z.object({
     .nullable()
     .refine(
       (files) => !files || files.length === 0 || files[0].size <= MAX_FILE_SIZE,
-      \`El tamaño máximo de la imagen es 5MB.\`
+      'El tamaño máximo de la imagen es 5MB.' // CORREGIDO
     )
     .refine(
       (files) => !files || files.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files[0].type),
-      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp."
+      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp." // CORREGIDO (ya usaba comillas dobles, está bien)
     ),
 });
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -217,10 +217,12 @@ export default function ArtisanDashboardPage() {
   };
 
   const handleSignOut = async () => {
+    setIsLoading(true); // Optional: for visual feedback
     await supabase.auth.signOut();
     router.push('/');
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
-    // router.refresh(); // Not strictly necessary here if Navbar handles it or redirect is sufficient
+    // router.refresh(); // Navbar's refresh should be enough
+    setIsLoading(false);
   };
 
   if (isLoading) {
@@ -261,7 +263,7 @@ export default function ArtisanDashboardPage() {
             <h1 className="text-3xl font-bold text-primary">Panel de Artesano</h1>
             <p className="text-muted-foreground">Bienvenido, {artisanProfile.nombre}. Gestiona tu tienda y productos.</p>
           </div>
-          <Button onClick={handleSignOut} variant="outline">
+          <Button onClick={handleSignOut} variant="outline" disabled={isLoading}>
             <LogOut className="mr-2 h-4 w-4" />
             Cerrar Sesión
           </Button>
@@ -517,7 +519,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
     
     const { data: productsData, error } = await supabase
       .from('productos')
-      .select('*, imagenes_productos(url, es_principal, file_path)') // also select file_path for deletion
+      .select('*, imagenes_productos(url, es_principal, file_path)') 
       .eq('tienda_id', storeId)
       .order('nombre', { ascending: true });
     
@@ -569,7 +571,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
     console.log("[ProductManagement] Confirming delete for product:", productToDelete);
     
     try {
-      // 1. Get all image file_paths for the product
       const { data: imagesToDelete, error: imagesError } = await supabase
         .from('imagenes_productos')
         .select('file_path')
@@ -580,7 +581,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         throw imagesError;
       }
       
-      // 2. Delete images from Supabase Storage
       if (imagesToDelete && imagesToDelete.length > 0) {
         const filePaths = imagesToDelete
           .map(img => img.file_path)
@@ -590,21 +590,19 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           console.log("[ProductManagement] Deleting files from storage:", filePaths);
           const { error: storageError } = await supabase
             .storage
-            .from('product-images') // Ensure this bucket name is correct
+            .from('product-images')
             .remove(filePaths);
           
           if (storageError) {
             console.error("[ProductManagement] Error deleting files from storage:", storageError);
-            // Decide if you want to throw or just log and continue to delete DB records
-            // For now, we'll log and continue, but you might want to stop if storage deletion fails
+            // Log and continue, or throw if critical
           } else {
             console.log("[ProductManagement] Files deleted from storage successfully.");
           }
         }
       }
       
-      // 3. Delete image records from 'imagenes_productos' table (CASCADE delete might handle this if set up)
-      // If not using CASCADE, explicitly delete:
+      console.log("[ProductManagement] Deleting image records from DB for product:", productToDelete.id);
       const { error: deleteImageDbError } = await supabase
         .from('imagenes_productos')
         .delete()
@@ -612,12 +610,11 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
       if (deleteImageDbError) {
         console.error("[ProductManagement] Error deleting image records from DB:", deleteImageDbError);
-        // Decide if you want to throw or just log
+        // Log and continue, or throw
       } else {
         console.log("[ProductManagement] Image records deleted from DB.");
       }
 
-      // 4. Delete the product itself
       console.log("[ProductManagement] Deleting product from DB:", productToDelete.id);
       const { error: deleteProductError } = await supabase
         .from('productos')
@@ -661,7 +658,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         stock: values.stock,
         tienda_id: storeId,
         estado: 'activo' as "activo" | "inactivo" | "borrador",
-        // metadatos: null // Assuming no specific metadata for now
       };
       
       let result;
@@ -714,15 +710,15 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       if (imageFile && productId) {
         console.log("[ProductManagement] Image file present. Uploading for productId:", productId, "File:", imageFile.name);
         const fileName = \`\${Date.now()}_\${imageFile.name.replace(/\\s+/g, '_')}\`;
-        const filePath = \`\${productId}/\${fileName}\`; // Store images in a folder per product
+        const filePath = \`\${productId}/\${fileName}\`; 
         
         console.log("[ProductManagement] Uploading image to path:", filePath);
         const { error: uploadError } = await supabase
           .storage
-          .from('product-images') // Ensure this bucket name is correct
+          .from('product-images')
           .upload(filePath, imageFile, {
             cacheControl: '3600',
-            upsert: false, // Set to true if you want to overwrite if file with same name exists
+            upsert: false, 
           }); 
           
         if (uploadError) {
@@ -741,7 +737,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         }
         console.log("[ProductManagement] Public URL obtained:", publicUrlData.publicUrl);
         
-        // Set other images for this product to not be principal
         console.log("[ProductManagement] Setting other images for product", productId, "to not principal.");
         const { error: updateOldImagesError } = await supabase
           .from('imagenes_productos')
@@ -750,7 +745,6 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
         if (updateOldImagesError){
           console.error("[ProductManagement] Error updating old images to not principal:", updateOldImagesError);
-          // Non-critical, proceed with inserting new image record
         }
           
         console.log("[ProductManagement] Inserting new image record into DB. ProductId:", productId, "URL:", publicUrlData.publicUrl);
@@ -759,13 +753,12 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           .insert({
             producto_id: productId,
             url: publicUrlData.publicUrl,
-            file_path: filePath, // Store the file_path for easier deletion later
+            file_path: filePath, 
             es_principal: true,
           });
           
         if (imageDbError) {
           console.error("[ProductManagement] Error inserting image record into DB:", imageDbError, "Attempting to remove uploaded file from storage:", filePath);
-          // If DB insert fails, try to remove the uploaded file to avoid orphans
           await supabase.storage.from('product-images').remove([filePath]);
           throw new Error(\`Error al guardar la información de la imagen: \${imageDbError.message}\`);
         }
@@ -940,7 +933,6 @@ function ProductFormDialog({
   });
 
   useEffect(() => {
-    // Reset form when existingProduct changes (e.g., opening dialog for different products)
     form.reset({
       nombre: existingProduct?.nombre || "",
       descripcion: existingProduct?.descripcion || "",
@@ -948,9 +940,7 @@ function ProductFormDialog({
       stock: existingProduct?.stock || 0,
       imagenFile: null, 
     });
-    // Set image preview from existing product or clear it
     setImagePreview(existingProduct?.principal_image_url || null); 
-    // Clear the file input visually if it exists
     if (fileInputRef.current) { 
       fileInputRef.current.value = "";
     }
@@ -958,9 +948,8 @@ function ProductFormDialog({
 
   const handleFormSubmit = async (values: ProductFormValues) => {
     setIsSubmittingProduct(true);
-    await onSubmit(values); // The parent component (ProductManagement) will handle dialog closing on success
+    await onSubmit(values); 
     setIsSubmittingProduct(false);
-    // Do not call onClose here directly, let the parent decide based on submission success
   };
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -975,7 +964,6 @@ function ProductFormDialog({
       reader.readAsDataURL(file);
     } else {
       form.setValue("imagenFile", null, { shouldValidate: true });
-      // Revert to existing image if no new file is chosen, or null if there was none
       setImagePreview(existingProduct?.principal_image_url || null); 
     }
   };
@@ -1024,7 +1012,7 @@ function ProductFormDialog({
                     step="0.01" 
                     placeholder="Ej: 250.00" 
                     {...field} 
-                    onChange={event => field.onChange(+event.target.value)}
+                    onChange={event => field.onChange(parseFloat(event.target.value) || 0)}
                   />
                 </FormControl>
                 <FormMessage />
@@ -1116,4 +1104,3 @@ function ProductFormDialog({
     </Form>
   );
 }
-
