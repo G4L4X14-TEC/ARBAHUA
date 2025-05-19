@@ -20,7 +20,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Loader2, Store as StoreIcon, Edit3, PlusCircle, LogOut, Trash2, PackagePlus, List, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogFooter } from "@/components/ui/alert-dialog"; // Asegurar que AlertDialogFooter está importado
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 // Schema for creating/editing a store
@@ -219,18 +219,17 @@ function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: 
     setIsSubmitting(true);
     try {
       let resultStore: Tables<'tiendas'> | null = null;
-      const storePayload: TablesUpdate<'tiendas'> = { // Use TablesUpdate for payload type safety
+      const storePayload: TablesUpdate<'tiendas'> = { 
         nombre: values.nombre,
         descripcion: values.descripcion || null,
-        // updated_at is handled by trigger if exists, or by supabase default
       };
 
-      if (existingStore?.id) { // Check existingStore.id
+      if (existingStore?.id) { 
         const { data, error } = await supabase
           .from("tiendas")
           .update(storePayload)
           .eq("id", existingStore.id)
-          .eq("artesano_id", artisanId) // Ensure artesano_id matches for security
+          .eq("artesano_id", artisanId) 
           .select()
           .single();
         if (error) throw error;
@@ -239,7 +238,7 @@ function CreateEditStoreForm({ artisanId, existingStore, onSuccess, onCancel }: 
         const insertPayload: TablesInsert<'tiendas'> = {
             ...storePayload,
             artesano_id: artisanId,
-            estado: 'activa', // Default state for new stores
+            estado: 'activa', 
         };
         const { data, error } = await supabase
           .from("tiendas")
@@ -357,9 +356,6 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         <p className="text-sm ">
             Estado: <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${store.estado === 'activa' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{store.estado}</span>
         </p>
-        {/* <Button asChild variant="link" className="p-0 h-auto text-primary">
-            <Link href={`/artisan-profile/${store.artesano_id}`}>Ver Perfil Público de la Tienda (Próximamente)</Link>
-        </Button> */}
       </CardContent>
     </Card>
   );
@@ -421,7 +417,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       toast({ title: "Error al eliminar producto", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Producto Eliminado", description: `"${productToDelete.nombre}" ha sido eliminado.` });
-      fetchProducts(); // Refresh list
+      fetchProducts(); 
     }
     setIsConfirmDeleteDialogOpen(false);
     setProductToDelete(null);
@@ -429,20 +425,20 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
   const onProductSubmit = async (values: ProductFormValues) => {
     try {
-      if (editingProduct) { // Update existing product
+      if (editingProduct) { 
         const { data, error } = await supabase
           .from('productos')
-          .update({ ...values, updated_at: new Date().toISOString() } as TablesUpdate<'productos'>) // Cast to TablesUpdate
+          .update({ ...values, updated_at: new Date().toISOString() } as TablesUpdate<'productos'>) 
           .eq('id', editingProduct.id)
           .select()
           .single();
         if (error) throw error;
         toast({ title: "Producto Actualizado", description: `"${data?.nombre}" ha sido actualizado.`});
-      } else { // Create new product
+      } else { 
         const payload: TablesInsert<'productos'> = {
           ...values,
           tienda_id: storeId,
-          estado: 'activo', // Default state for new products
+          estado: 'activo', 
         };
         const { data, error } = await supabase
           .from('productos')
@@ -454,7 +450,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       }
       setIsProductDialogOpen(false);
       setEditingProduct(null);
-      fetchProducts(); // Refresh product list
+      fetchProducts(); 
     } catch (error: any) {
       toast({
         title: `Error al ${editingProduct ? 'actualizar' : 'crear'} producto`,
@@ -579,7 +575,6 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
   });
 
   useEffect(() => {
-    // Reset form when existingProduct changes (e.g., opening dialog for a new product after editing one)
     form.reset({
       nombre: existingProduct?.nombre || "",
       descripcion: existingProduct?.descripcion || "",
@@ -593,7 +588,6 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
     setIsSubmittingProduct(true);
     await onSubmit(values);
     setIsSubmittingProduct(false);
-    // onClose is handled by the parent component after successful submission
   };
 
   return (
@@ -668,5 +662,3 @@ function ProductFormDialog({ onSubmit, existingProduct, onClose }: ProductFormDi
     </Form>
   );
 }
-
-    
