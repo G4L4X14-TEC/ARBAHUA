@@ -22,18 +22,12 @@ export type StoreForDisplay = Tables<'tiendas'>;
 
 // Helper function to create a Supabase client for Server Actions
 function createSupabaseServerClientAction() {
-  const cookieStore = cookies();
+  const cookieStore = cookies(); // Call cookies() once
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    // This case should ideally be handled by environment variable checks at build/startup
-    // or a more robust configuration management.
-    // For now, logging and throwing an error or returning a specific error state.
-    console.error("[SupabaseServerClientAction] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
-    // Depending on how you want to handle this, you might throw an error
-    // or return null/undefined and let the calling function handle it.
-    // throw new Error("Supabase configuration is missing for Server Action client.");
+    console.error("[SupabaseServerClientAction] CRITICAL ERROR: Supabase URL or Anon Key is missing in env.");
     return null; 
   }
 
@@ -49,8 +43,6 @@ function createSupabaseServerClientAction() {
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // This can happen in Next.js App Router when trying to set a cookie too late.
-            // For Server Actions, this is generally safe during the action's execution.
             console.warn(`[SupabaseServerClientAction] Failed to set cookie '${name}':`, error);
           }
         },
@@ -72,7 +64,7 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
   const supabase = createSupabaseServerClientAction();
 
   if (!supabase) {
-    console.error("[getFeaturedProductsAction] Failed to initialize Supabase client.");
+    console.error("[getFeaturedProductsAction] Failed to initialize Supabase client. Env vars might be missing.");
     return []; // Return empty array if client initialization failed
   }
   
@@ -81,11 +73,13 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
   try {
     const { data: productsData, error } = await supabase
       .from('productos')
-      .select(`
-        *,
-        tiendas (nombre),
-        imagenes_productos (url, es_principal)
-      `)
+      .select(
+        `
+          *,
+          tiendas (nombre),
+          imagenes_productos (url, es_principal)
+        `
+      )
       .eq('estado', 'activo') // Solo productos activos
       .order('fecha_creacion', { ascending: false }) // Mostrar los más recientes primero
       .limit(6); // Limitar a 6 productos destacados
@@ -109,7 +103,7 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
 
       return {
         ...coreProductFields,
-        imagen_url: principalImage?.url || anyImage?.url || \`https://placehold.co/400x300.png?text=\${encodeURIComponent(coreProductFields.nombre)}\`,
+        imagen_url: principalImage?.url || anyImage?.url || `https://placehold.co/400x300.png?text=${encodeURIComponent(coreProductFields.nombre)}`,
         tienda_nombre: tiendas?.nombre || 'Artesano Independiente',
       };
     });
@@ -124,7 +118,7 @@ export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
   const supabase = createSupabaseServerClientAction();
 
   if (!supabase) {
-    console.error("[getFeaturedStoresAction] Failed to initialize Supabase client.");
+    console.error("[getFeaturedStoresAction] Failed to initialize Supabase client. Env vars might be missing.");
     return [];
   }
 
