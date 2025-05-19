@@ -62,7 +62,7 @@ import {
   AlertDialogDescription, 
   AlertDialogHeader, 
   AlertDialogTitle,
-  AlertDialogFooter // Asegúrate que AlertDialogFooter esté importado
+  AlertDialogFooter
 } from "@/components/ui/alert-dialog";
 import { 
   Table, 
@@ -87,18 +87,18 @@ const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/web
 const productFormSchema = z.object({
   nombre: z.string().min(3, "El nombre debe tener al menos 3 caracteres.").max(255),
   descripcion: z.string().max(1000, "La descripción no puede exceder los 1000 caracteres.").optional().nullable(),
-  precio: z.coerce.number().positive("El precio debe ser un número positivo.").min(0.01, "El precio debe ser mayor a 0."),
-  stock: z.coerce.number().int().min(0, "El stock no puede ser negativo."),
+  precio: z.coerce.number({invalid_type_error: "El precio debe ser un número."}).positive("El precio debe ser un número positivo.").min(0.01, "El precio debe ser mayor a 0."),
+  stock: z.coerce.number({invalid_type_error: "El stock debe ser un número."}).int("El stock debe ser un número entero.").min(0, "El stock no puede ser negativo."),
   imagenFile: z.custom<FileList>()
     .optional()
     .nullable()
     .refine(
       (files) => !files || files.length === 0 || files[0].size <= MAX_FILE_SIZE,
-      'El tamaño máximo de la imagen es 5MB.' 
+      'El tamaño máximo de la imagen es 5MB.' // CORREGIDO: Usar comillas simples
     )
     .refine(
       (files) => !files || files.length === 0 || ACCEPTED_IMAGE_TYPES.includes(files[0].type),
-      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp."
+      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp." // Comillas dobles también está bien
     ),
 });
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -148,7 +148,7 @@ export default function ArtisanDashboardPage() {
           description: "No se pudo cargar tu perfil de artesano. Intenta iniciar sesión de nuevo.", 
           variant: "destructive" 
         });
-        await supabase.auth.signOut(); // Sign out if profile is crucial and missing
+        await supabase.auth.signOut(); 
         router.push("/login");
         return;
       }
@@ -209,7 +209,7 @@ export default function ArtisanDashboardPage() {
     setShowCreateEditStoreForm(false);
     toast({ 
       title: store?.id ? "Tienda Actualizada" : "Tienda Creada", 
-      description: \`Tu tienda "\${updatedStore.nombre}" ha sido \${store?.id ? 'actualizada' : 'creada'} con éxito.\`
+      description: `Tu tienda "${updatedStore.nombre}" ha sido ${store?.id ? 'actualizada' : 'creada'} con éxito.`
     });
   };
 
@@ -342,9 +342,9 @@ function CreateEditStoreForm({
         resultStore = data;
       } else {
         const insertPayload: TablesInsert<'tiendas'> = {
-          ...storePayload,
           artesano_id: artisanId,
           nombre: values.nombre, 
+          descripcion: values.descripcion || null,
           estado: 'activa', 
         };
         const { data, error } = await supabase
@@ -361,7 +361,7 @@ function CreateEditStoreForm({
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: \`Error al \${existingStore?.id ? 'actualizar' : 'crear'} la tienda\`,
+        title: `Error al ${existingStore?.id ? 'actualizar' : 'crear'} la tienda`,
         description: error.message || "Ocurrió un problema. Inténtalo de nuevo.",
       });
     } finally {
@@ -471,7 +471,7 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         <Image
           data-ai-hint="crafts store logo"
           src={store.logo_url || "https://placehold.co/300x200.png"}
-          alt={\`Logo de \${store.nombre}\`}
+          alt={`Logo de ${store.nombre}`}
           width={300}
           height={200}
           className="rounded-md object-cover h-40 w-full sm:w-auto sm:h-32 aspect-video mb-4 border"
@@ -482,11 +482,11 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         </p>
         <p className="text-sm">
           Estado: 
-          <span className={\`font-semibold px-2 py-0.5 rounded-full text-xs \${
+          <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${
             store.estado === 'activa' 
               ? 'bg-green-100 text-green-700' 
               : 'bg-red-100 text-red-700'
-          }\`}>
+          }`}>
             {store.estado}
           </span>
         </p>
@@ -566,6 +566,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
     console.log("[ProductManagement] Confirming delete for product:", productToDelete.id, productToDelete.nombre);
     
     try {
+      // 1. Get image file_paths to delete from storage
       const { data: imagesToDelete, error: imagesError } = await supabase
         .from('imagenes_productos')
         .select('file_path')
@@ -573,8 +574,10 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       
       if (imagesError) {
         console.warn("[ProductManagement] Error fetching image paths for deletion:", imagesError.message);
+        // Continue deletion even if image paths can't be fetched, to remove DB records
       }
       
+      // 2. Delete files from storage if paths were found
       if (imagesToDelete && imagesToDelete.length > 0) {
         const filePaths = imagesToDelete
           .map(img => img.file_path)
@@ -585,13 +588,14 @@ function ProductManagement({ storeId }: ProductManagementProps) {
           const { error: storageError } = await supabase.storage.from('product-images').remove(filePaths);
           if (storageError) {
             console.warn("[ProductManagement] Error deleting files from storage:", storageError.message);
-            toast({ title: "Advertencia", description: \`No se pudieron eliminar algunos archivos de imagen: \${storageError.message}\`, variant: "destructive" });
+            toast({ title: "Advertencia", description: `No se pudieron eliminar algunos archivos de imagen: ${storageError.message}`, variant: "destructive" });
           } else {
             console.log("[ProductManagement] Files deleted from storage successfully for product:", productToDelete.id);
           }
         }
       }
       
+      // 3. Delete image records from DB
       console.log("[ProductManagement] Deleting image records from DB for product:", productToDelete.id);
       const { error: deleteImageDbError } = await supabase
         .from('imagenes_productos')
@@ -600,11 +604,12 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
       if (deleteImageDbError) {
         console.warn("[ProductManagement] Error deleting image records from DB:", deleteImageDbError.message);
-        toast({ title: "Advertencia", description: \`No se pudieron eliminar los registros de imágenes: \${deleteImageDbError.message}\`, variant: "destructive" });
+        toast({ title: "Advertencia", description: `No se pudieron eliminar los registros de imágenes: ${deleteImageDbError.message}`, variant: "destructive" });
       } else {
         console.log("[ProductManagement] Image records deleted from DB for product:", productToDelete.id);
       }
 
+      // 4. Delete product from DB
       console.log("[ProductManagement] Deleting product from DB:", productToDelete.id);
       const { error: deleteProductError } = await supabase
         .from('productos')
@@ -615,7 +620,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
       
       toast({ 
         title: "Producto Eliminado", 
-        description: \`"\${productToDelete.nombre}" ha sido eliminado.\`
+        description: `"${productToDelete.nombre}" ha sido eliminado.`
       });
       console.log("[ProductManagement] Product deleted successfully, fetching updated products list.");
       fetchProducts(); 
@@ -638,6 +643,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
     let productUpdatedOrCreated = false;
 
     try {
+      // Step 1: Create or Update product textual data
       const productPayload: Partial<TablesUpdate<'productos'> | TablesInsert<'productos'>> = {
         nombre: values.nombre,
         descripcion: values.descripcion || null,
@@ -676,41 +682,40 @@ function ProductManagement({ storeId }: ProductManagementProps) {
         throw new Error("No se pudo obtener el ID del producto después de guardarlo.");
       }
       productUpdatedOrCreated = true;
-      toast({ 
-        title: editingProduct ? "Producto Actualizado" : "Producto Creado", 
-        description: \`"\${productResult.data?.nombre}" ha sido \${editingProduct ? 'actualizado' : 'añadido'}.\`
-      });
-      console.log(\`[ProductManagement] Product \${editingProduct ? 'updated' : 'inserted'} successfully: ID \${productId}\`);
+      console.log(`[ProductManagement] Product ${editingProduct ? 'updated' : 'inserted'} successfully: ID ${productId}`);
       
+      // Step 2: Handle image upload if a file is present
       const imageFile = values.imagenFile?.[0];
-      if (imageFile && productId) { // Ensure productId is available
+      if (imageFile && productId) {
         console.log("[ProductManagement] Image file present. Uploading for productId:", productId, "File:", imageFile.name);
-        const fileName = \`\${Date.now()}_\${imageFile.name.replace(/\s+/g, '_')}\`;
-        const filePath = \`\${productId}/\${fileName}\`; 
+        const fileName = `${Date.now()}_${imageFile.name.replace(/\s+/g, '_')}`;
+        const filePath = `${productId}/${fileName}`; 
         
         console.log("[ProductManagement] Uploading image to path:", filePath);
-        const { error: uploadError } = await supabase.storage.from('product-images').upload(filePath, imageFile, {
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, imageFile, {
             cacheControl: '3600',
-            upsert: true, 
+            upsert: false, // Use false to avoid overwriting if file path somehow collides, though timestamp should prevent this
         }); 
           
         if (uploadError) {
           console.error("[ProductManagement] Error uploading image to storage:", uploadError);
           throw uploadError;
         }
-        console.log("[ProductManagement] Image uploaded to storage for productId:", productId);
+        console.log("[ProductManagement] Image uploaded to storage for productId:", productId, "Upload data:", uploadData);
         
         const { data: publicUrlData } = supabase.storage.from('product-images').getPublicUrl(filePath);
         const newImageUrl = publicUrlData?.publicUrl;
 
         if (!newImageUrl) {
           console.error("[ProductManagement] Could not get public URL for image path:", filePath);
-          // Attempt to remove the uploaded file if DB operation might fail
-          await supabase.storage.from('product-images').remove([filePath]);
+          await supabase.storage.from('product-images').remove([filePath]); // Attempt to remove uploaded file
           throw new Error("No se pudo obtener la URL pública de la imagen después de subirla.");
         }
         console.log("[ProductManagement] Public URL obtained:", newImageUrl);
         
+        // Step 3: Set other images for this product to not be principal
         console.log("[ProductManagement] Setting other images for product", productId, "to not principal.");
         const { error: updateOldImagesError } = await supabase
           .from('imagenes_productos')
@@ -719,47 +724,57 @@ function ProductManagement({ storeId }: ProductManagementProps) {
 
         if (updateOldImagesError){
           console.warn("[ProductManagement] Error updating old images to not principal:", updateOldImagesError.message);
+          // Not throwing error here, as the main image insert is more critical
         } else {
           console.log("[ProductManagement] Successfully set old images to not principal for product:", productId);
         }
           
+        // Step 4: Insert new image record into DB
         console.log("[ProductManagement] Inserting new image record into DB for product:", productId);
-        const { error: imageDbError } = await supabase
+        const { data: newImageRecord, error: imageDbError } = await supabase
           .from('imagenes_productos')
           .insert({ 
             producto_id: productId,
             url: newImageUrl,
-            file_path: filePath,
+            file_path: filePath, // Save the file_path for future deletions
             es_principal: true,
-          });
+          })
+          .select()
+          .single();
           
         if (imageDbError) {
           console.error("[ProductManagement] Error inserting image record into DB:", imageDbError);
-          console.error("[ProductManagement] Attempting to remove uploaded file from storage due to DB error:", filePath);
+          console.warn("[ProductManagement] Attempting to remove uploaded file from storage due to DB error:", filePath);
           await supabase.storage.from('product-images').remove([filePath]); 
-          throw new Error(\`Error al guardar la información de la imagen: \${imageDbError.message}\`);
+          throw new Error(`Error al guardar la información de la imagen: ${imageDbError.message}`);
         }
-        
+        console.log("[ProductManagement] Image record inserted into DB successfully for productId:", productId, "New image record:", newImageRecord);
         toast({ 
           title: "Imagen Subida", 
           description: "La imagen principal del producto ha sido actualizada."
         });
-        console.log("[ProductManagement] Image record inserted into DB successfully for productId:", productId);
       }
       
+      // If product was created/updated successfully (even if image part was skipped or failed but didn't throw)
       if (productUpdatedOrCreated) {
+         toast({ 
+          title: editingProduct ? "Producto Actualizado" : "Producto Creado", 
+          description: `"${productResult.data?.nombre}" ha sido ${editingProduct ? 'actualizado' : 'añadido'}.`
+        });
         setIsProductDialogOpen(false);
         setEditingProduct(null);
         console.log("[ProductManagement] Product operation successful, fetching updated product list.");
-        fetchProducts();
+        fetchProducts(); // Refresh product list
       }
+
     } catch (error: any) {
       console.error("[ProductManagement] Error in product submission process:", error);
       toast({
         title: "Error en la operación del producto",
-        description: error.message || "Ocurrió un problema.",
+        description: error.message || "Ocurrió un problema inesperado.",
         variant: "destructive",
       });
+      // Do not close dialog or refresh list on critical error
     }
   };
 
@@ -820,7 +835,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
                   </TableCell>
                   <TableCell className="font-medium">{product.nombre}</TableCell>
                   <TableCell className="text-right">
-                    MXN\${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}
+                    MXN${typeof product.precio === 'number' ? product.precio.toFixed(2) : 'N/A'}
                   </TableCell>
                   <TableCell className="text-right">{product.stock}</TableCell>
                   <TableCell className="text-right space-x-2">
@@ -871,7 +886,7 @@ function ProductManagement({ storeId }: ProductManagementProps) {
             </AlertDialogTitle>
             <AlertDialogDescription>
               Esta acción no se puede deshacer. Se eliminará permanentemente el producto 
-              "\${productToDelete?.nombre}" y todas sus imágenes asociadas de tu tienda.
+              "${productToDelete?.nombre}" y todas sus imágenes asociadas de tu tienda.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -946,6 +961,8 @@ function ProductFormDialog({
   const handleFormSubmit = async (values: ProductFormValues) => {
     setIsSubmittingProduct(true);
     await onSubmit(values); 
+    // No cierres el diálogo ni resetees el formulario aquí.
+    // La función onSubmit del padre (ProductManagement) lo hará si todo es exitoso.
     setIsSubmittingProduct(false);
   };
 
