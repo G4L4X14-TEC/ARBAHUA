@@ -7,9 +7,11 @@ import { ArrowRight } from 'lucide-react';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import type { Tables } from '@/lib/supabase/database.types';
 
+export const dynamic = 'force-dynamic'; // Asegura renderizado dinámico
+
 // Type for products fetched from Supabase, including nested data
 type ProductFromSupabase = Tables<'productos'> & {
-  tiendas: Pick<Tables<'tiendas'>, 'nombre'> | null; // Store can be null if not found or not joined
+  tiendas: Pick<Tables<'tiendas'>, 'nombre'> | null;
   imagenes_productos: Array<{ url: string | null; es_principal: boolean | null }>;
 };
 
