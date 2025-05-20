@@ -22,16 +22,36 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-// Placeholder para ShippingFormValues
-type ShippingFormValues = {
-  nombreCompleto: string;
-  direccion: string;
-  ciudad: string;
-  codigoPostal: string;
-  pais: string;
-  telefono: string;
-};
+// Esquema de validación para el formulario de envío
+const shippingFormSchema = z.object({
+  nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
+  direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
+  ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
+  codigoPostal: z.string().regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
+  pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
+  telefono: z.string().regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
+});
+type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -43,25 +63,24 @@ export default function CheckoutPage() {
   const [cartItems, setCartItems] = React.useState<CartItemForDisplay[]>([]);
   const [isLoadingCart, setIsLoadingCart] = React.useState(true);
   const [errorCart, setErrorCart] = React.useState<string | null>(null);
+  const [shippingData, setShippingData] = React.useState<ShippingFormValues | null>(null);
+  const [isShippingFormValid, setIsShippingFormValid] = React.useState(false);
+
 
   React.useEffect(() => {
     const fetchUser = async () => {
       setIsLoadingUser(true);
-      console.log("[CheckoutPage] Verificando sesión del usuario...");
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
-        console.error("[CheckoutPage] Error al obtener sesión:", sessionError.message);
         toast({ title: "Error de Sesión", description: "No se pudo verificar tu sesión.", variant: "destructive" });
         router.push("/login?redirect=/checkout");
         return;
       }
       if (!session?.user) {
-        console.log("[CheckoutPage] Usuario no autenticado. Redirigiendo a login.");
         toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para proceder al pago.", variant: "destructive" });
         router.push("/login?redirect=/checkout");
         return;
       }
-      console.log("[CheckoutPage] Usuario autenticado:", session.user.id);
       setUser(session.user);
       setIsLoadingUser(false);
     };
@@ -74,9 +93,7 @@ export default function CheckoutPage() {
         setIsLoadingCart(true);
         setErrorCart(null);
         try {
-          console.log("[CheckoutPage] Obteniendo ítems del carrito...");
           const items = await getCartItemsAction();
-          console.log("[CheckoutPage] Ítems del carrito obtenidos:", items);
           if (items.length === 0) {
             toast({ title: "Carrito Vacío", description: "No tienes productos para pagar. Serás redirigido.", variant: "default" });
             router.push("/cart"); 
@@ -84,7 +101,6 @@ export default function CheckoutPage() {
           }
           setCartItems(items);
         } catch (err: any) {
-          console.error("[CheckoutPage] Error al obtener ítems del carrito:", err);
           setErrorCart("No se pudieron cargar los artículos del carrito. Inténtalo de nuevo.");
           toast({
             title: "Error al Cargar Carrito",
@@ -102,6 +118,14 @@ export default function CheckoutPage() {
   const calculateTotal = () => {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
+
+  const handleShippingSubmit = (data: ShippingFormValues) => {
+    console.log("Shipping Data Submitted:", data);
+    setShippingData(data);
+    // Aquí se podría guardar la dirección o pasarla al siguiente paso
+    toast({ title: "Información de Envío Guardada", description: "Puedes proceder al pago." });
+  };
+
 
   if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0 && !errorCart) ) {
     return (
@@ -133,6 +157,7 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0) {
+     // Esta condición puede que ya no se alcance si fetchCart redirige antes
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -169,8 +194,14 @@ export default function CheckoutPage() {
         </section>
 
         <section className="lg:col-span-2 space-y-8">
-          <ShippingForm />
-          <PaymentSection />
+          <ShippingForm 
+            onSubmitSuccess={handleShippingSubmit} 
+            onValidationChange={setIsShippingFormValid}
+          />
+          <PaymentSection 
+            isShippingComplete={isShippingFormValid} 
+            shippingValues={shippingData} 
+          />
         </section>
       </div>
     </main>
@@ -220,19 +251,32 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
   );
 }
 
-function ShippingForm() {
-  // Placeholder para el estado del formulario. En una implementación real, usaríamos react-hook-form.
-  const [formData, setFormData] = React.useState<ShippingFormValues>({
-    nombreCompleto: '',
-    direccion: '',
-    ciudad: '',
-    codigoPostal: '',
-    pais: 'México', 
-    telefono: ''
+interface ShippingFormProps {
+  onSubmitSuccess: (data: ShippingFormValues) => void;
+  onValidationChange: (isValid: boolean) => void;
+}
+
+function ShippingForm({ onSubmitSuccess, onValidationChange }: ShippingFormProps) {
+  const form = useForm<ShippingFormValues>({
+    resolver: zodResolver(shippingFormSchema),
+    mode: "onChange", // Validar en cada cambio para actualizar el estado del botón de pago
+    defaultValues: {
+      nombreCompleto: "",
+      direccion: "",
+      ciudad: "",
+      codigoPostal: "",
+      pais: "México", // Valor por defecto
+      telefono: "",
+    },
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  React.useEffect(() => {
+    onValidationChange(form.formState.isValid);
+  }, [form.formState.isValid, onValidationChange]);
+
+  // La función onSubmit ahora solo se llama si el formulario es válido
+  const onSubmit = (data: ShippingFormValues) => {
+    onSubmitSuccess(data); 
   };
 
   return (
@@ -244,47 +288,132 @@ function ShippingForm() {
         <CardDescription>Ingresa los detalles para la entrega de tu pedido.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4">
-          <div>
-            <Label htmlFor="nombreCompleto">Nombre Completo</Label>
-            <Input id="nombreCompleto" name="nombreCompleto" value={formData.nombreCompleto} onChange={handleChange} required placeholder="Juan Pérez Rodríguez"/>
-          </div>
-          <div>
-            <Label htmlFor="direccion">Dirección (Calle y Número, Colonia, Referencias)</Label>
-            <Input id="direccion" name="direccion" value={formData.direccion} onChange={handleChange} required placeholder="Av. Siempre Viva 742, Col. Springfield"/>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="ciudad">Ciudad</Label>
-              <Input id="ciudad" name="ciudad" value={formData.ciudad} onChange={handleChange} required placeholder="Ciudad de México"/>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="nombreCompleto"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre Completo</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Juan Pérez Rodríguez" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="direccion"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Dirección (Calle y Número, Colonia, Referencias)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Av. Siempre Viva 742, Col. Springfield" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="ciudad"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ciudad</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ciudad de México" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="codigoPostal"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Código Postal</FormLabel>
+                    <FormControl>
+                      <Input placeholder="01234" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            <div>
-              <Label htmlFor="codigoPostal">Código Postal</Label>
-              <Input id="codigoPostal" name="codigoPostal" value={formData.codigoPostal} onChange={handleChange} required placeholder="01234"/>
-            </div>
-          </div>
 
-           <div>
-            <Label htmlFor="pais">País</Label>
-            <Input id="pais" name="pais" value={formData.pais} onChange={handleChange} required />
-          </div>
-          <div>
-            <Label htmlFor="telefono">Teléfono de Contacto (10 dígitos)</Label>
-            <Input id="telefono" name="telefono" type="tel" value={formData.telefono} onChange={handleChange} required placeholder="5512345678"/>
-          </div>
-        </form>
+            <FormField
+              control={form.control}
+              name="pais"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>País</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un país" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="México">México</SelectItem>
+                      {/* Añade más países si es necesario */}
+                      {/* <SelectItem value="OtroPaís">OtroPaís</SelectItem> */}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="telefono"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Teléfono de Contacto (10 dígitos)</FormLabel>
+                  <FormControl>
+                    <Input type="tel" placeholder="5512345678" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* El botón de submit para el formulario de envío es opcional aquí, 
+                ya que el botón principal de "Finalizar Compra" podría validar y tomar estos datos.
+                Por ahora, lo dejamos sin un botón de submit explícito para este sub-formulario.
+                La validación 'onChange' y la llamada a onValidationChange informarán al padre.
+            */}
+          </form>
+        </Form>
       </CardContent>
     </Card>
   );
 }
 
-function PaymentSection() {
+interface PaymentSectionProps {
+  isShippingComplete: boolean;
+  shippingValues: ShippingFormValues | null;
+}
+
+function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionProps) {
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
-  const { toast } = useToast();
+  const { toast } = useToast(); // Obtener toast aquí
 
   const handleSimulatePayment = () => {
+    if (!isShippingComplete || !shippingValues) {
+      toast({
+        title: "Información Incompleta",
+        description: "Por favor, completa y valida la información de envío primero.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoadingPayment(true);
+    console.log("Simulating payment with shipping data:", shippingValues);
     toast({
       title: "Procesando Pago (Simulación)",
       description: "La integración real con Stripe se implementará después.",
@@ -318,7 +447,7 @@ function PaymentSection() {
             type="button"
             className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
             onClick={handleSimulatePayment}
-            disabled={isLoadingPayment}
+            disabled={isLoadingPayment || !isShippingComplete}
           >
             {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
             Finalizar Compra (Simulación)
@@ -327,4 +456,5 @@ function PaymentSection() {
     </Card>
   );
 }
-
+      
+    
