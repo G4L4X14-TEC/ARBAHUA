@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
-import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; // Importar la nueva acción
+import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -42,17 +42,35 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { loadStripe, type Stripe } from '@stripe/stripe-js';
+import {
+  Elements,
+  CardElement,
+  useStripe,
+  useElements,
+} from '@stripe/react-stripe-js';
+
 // Esquema de validación para el formulario de envío
 const shippingFormSchema = z.object({
   nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
   direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
-  estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}), // Campo añadido
+  estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}),
   codigoPostal: z.string().regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
   pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
   telefono: z.string().regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
 });
 export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
+
+// Carga la instancia de Stripe. ¡Asegúrate de que tu clave publicable esté en las variables de entorno!
+// Esta promesa se resuelve con el objeto Stripe o null si la clave no está.
+const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+  : null;
+
+if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+  console.error("CRITICAL: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY no está definida. Stripe no funcionará.");
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -69,7 +87,6 @@ export default function CheckoutPage() {
   const [isShippingFormValidAndSubmitted, setIsShippingFormValidAndSubmitted] = React.useState(false);
   const [isSavingAddress, setIsSavingAddress] = React.useState(false);
   const [savedAddressId, setSavedAddressId] = React.useState<string | null>(null);
-
 
   React.useEffect(() => {
     const fetchUser = async () => {
@@ -127,11 +144,11 @@ export default function CheckoutPage() {
     console.log("[CheckoutPage] Shipping Data to be saved:", data);
     setIsSavingAddress(true);
     try {
-      const result = await saveShippingAddressAction(data);
+      const result = await saveShippingAddressAction(data); // Llama a la Server Action
       if (result.success && result.addressId) {
         setShippingData(data);
         setIsShippingFormValidAndSubmitted(true);
-        setSavedAddressId(result.addressId);
+        setSavedAddressId(result.addressId); // Guarda el ID de la dirección
         toast({ title: "Información de Envío Guardada", description: "Puedes proceder al pago." });
         console.log("[CheckoutPage] Address saved with ID:", result.addressId);
       } else {
@@ -144,7 +161,6 @@ export default function CheckoutPage() {
       setIsSavingAddress(false);
     }
   };
-
 
   if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0 && !errorCart) ) {
     return (
@@ -176,7 +192,6 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0) {
-    // Este caso ya se maneja en el useEffect que redirige a /cart, pero es una salvaguarda.
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -217,11 +232,26 @@ export default function CheckoutPage() {
             onSubmitSuccess={handleShippingSubmitSuccess}
             isSubmitting={isSavingAddress}
           />
-          {isShippingFormValidAndSubmitted && shippingData && (
+          {isShippingFormValidAndSubmitted && shippingData && stripePromise && (
             <PaymentSection 
               isShippingComplete={isShippingFormValidAndSubmitted} 
               shippingValues={shippingData} 
+              stripePromise={stripePromise}
             />
+          )}
+          {!stripePromise && isShippingFormValidAndSubmitted && (
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-xl text-destructive flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5"/> Error de Configuración de Pago
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-destructive-foreground">
+                  No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada en las variables de entorno (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
+                </p>
+              </CardContent>
+            </Card>
           )}
         </section>
       </div>
@@ -285,7 +315,7 @@ function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
       nombreCompleto: "",
       direccion: "",
       ciudad: "",
-      estado: "", // Campo añadido
+      estado: "",
       codigoPostal: "",
       pais: "México", 
       telefono: "",
@@ -333,7 +363,6 @@ function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
                 </FormItem>
               )}
             />
-            
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -350,7 +379,7 @@ function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
               />
                <FormField
                 control={form.control}
-                name="estado" // Campo añadido
+                name="estado"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Estado</FormLabel>
@@ -362,7 +391,7 @@ function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
                 )}
               />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"> {/* Nuevo grid para CP y País */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="codigoPostal"
@@ -390,7 +419,6 @@ function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="México">México</SelectItem>
-                        {/* Puedes añadir más países aquí si es necesario */}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -415,9 +443,9 @@ function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
              <Button 
               type="submit" 
               className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={!form.formState.isValid || form.formState.isSubmitting || isSubmitting}
+              disabled={!form.formState.isValid || isSubmitting}
             >
-              {form.formState.isSubmitting || isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Guardar Dirección y Continuar al Pago
             </Button>
           </form>
@@ -429,41 +457,11 @@ function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
 
 interface PaymentSectionProps {
   isShippingComplete: boolean;
-  shippingValues: ShippingFormValues | null; // Los valores del formulario de envío
+  shippingValues: ShippingFormValues | null; 
+  stripePromise: Promise<Stripe | null>; // Añadido
 }
 
-function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionProps) {
-  const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
-  const { toast } = useToast();
-
-  const handleSimulatePayment = () => {
-    if (!isShippingComplete || !shippingValues) {
-      toast({
-        title: "Información Incompleta",
-        description: "Por favor, completa y valida la información de envío primero.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoadingPayment(true);
-    console.log("Simulating payment with shipping data:", shippingValues);
-    // Aquí es donde, en el futuro, se llamaría a Stripe y se crearía la orden.
-    toast({
-      title: "Procesando Pago (Simulación)",
-      description: "La integración real con Stripe y la creación de la orden se implementarán después.",
-    });
-    setTimeout(() => {
-      setIsLoadingPayment(false);
-      toast({
-        title: "Pago Simulado Exitoso",
-        description: "¡Gracias por tu compra (simulada)!",
-      });
-      // Idealmente, aquí se redirigiría a una página de confirmación de orden o al perfil del usuario.
-      // router.push('/order-confirmation/SOME_ORDER_ID');
-    }, 2000);
-  };
-
+function PaymentSection({ isShippingComplete, shippingValues, stripePromise }: PaymentSectionProps) {
   return (
     <Card className="shadow-lg">
       <CardHeader>
@@ -475,26 +473,134 @@ function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionPr
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="bg-muted/50 p-6 rounded-md text-center space-y-3">
-          <ShieldCheck className="h-10 w-10 text-primary mx-auto" />
-          <p className="text-muted-foreground">
-            Aquí se integrarán los elementos seguros de Stripe para ingresar los datos de tu tarjeta.
-          </p>
-          <p className="text-xs text-muted-foreground">¡Tu pago será procesado de forma segura!</p>
-        </div>
-         <Button 
-            type="button"
-            className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
-            onClick={handleSimulatePayment}
-            disabled={isLoadingPayment || !isShippingComplete}
-          >
-            {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-            Finalizar Compra (Simulación)
-          </Button>
+        {isShippingComplete && stripePromise ? (
+          <Elements stripe={stripePromise}>
+            <StripePaymentForm shippingValues={shippingValues} />
+          </Elements>
+        ) : (
+          <div className="bg-muted/50 p-6 rounded-md text-center space-y-3">
+            <ShieldCheck className="h-10 w-10 text-primary mx-auto" />
+            <p className="text-muted-foreground">
+              {isShippingComplete 
+                ? "Cargando formulario de pago seguro..." 
+                : "Completa y guarda tu información de envío para activar el pago."}
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
-      
+
+interface StripePaymentFormProps {
+  shippingValues: ShippingFormValues | null;
+}
+
+function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const { toast } = useToast();
+  const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
+  const [paymentError, setPaymentError] = React.useState<string | null>(null);
+
+  const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setPaymentError(null);
+
+    if (!stripe || !elements) {
+      console.error("Stripe.js no se ha cargado todavía.");
+      setPaymentError("Error al cargar la pasarela de pago. Intenta de nuevo.");
+      return;
+    }
+
+    const cardElement = elements.getElement(CardElement);
+    if (!cardElement) {
+      console.error("CardElement no encontrado.");
+      setPaymentError("Error con el formulario de tarjeta. Intenta de nuevo.");
+      return;
+    }
+
+    if (!shippingValues) {
+      console.error("Datos de envío no disponibles para el pago.");
+      setPaymentError("Faltan los datos de envío para procesar el pago.");
+      return;
+    }
+
+    setIsLoadingPayment(true);
+    console.log("Simulando proceso de pago con Stripe. Datos de envío:", shippingValues);
+    // Aquí iría la lógica para:
+    // 1. Crear un PaymentIntent en tu backend (Server Action o Edge Function)
+    //    - Le enviarías el monto total del carrito.
+    //    - El backend crea el PaymentIntent con Stripe y te devuelve el client_secret.
+    // 2. Usar stripe.confirmCardPayment(clientSecret, { payment_method: { card: cardElement, billing_details: { ... } } })
     
+    // Simulación:
+    await new Promise(resolve => setTimeout(resolve, 2000)); 
+
+    // Simular éxito o error
+    const paymentSucceeded = Math.random() > 0.3; // Simular un 70% de éxito
+
+    if (paymentSucceeded) {
+      console.log("Pago (simulado) exitoso!");
+      toast({
+        title: "Pago Simulado Exitoso",
+        description: "¡Gracias por tu compra (simulada)! Tu pedido se está procesando.",
+      });
+      // Aquí normalmente se crearía la orden en la DB y se redirigiría.
+      // router.push('/order-confirmation/SIMULATED_ORDER_ID');
+    } else {
+      console.error("Pago (simulado) fallido.");
+      setPaymentError("El pago fue rechazado. Por favor, verifica los datos de tu tarjeta o intenta con otra.");
+      toast({
+        title: "Error en el Pago (Simulación)",
+        description: "El pago fue rechazado. Por favor, verifica los datos de tu tarjeta.",
+        variant: "destructive",
+      });
+    }
+    setIsLoadingPayment(false);
+  };
+
+  const cardElementOptions = {
+    style: {
+      base: {
+        color: "#32325d", // Puedes ajustar estos colores
+        fontFamily: 'Arial, sans-serif',
+        fontSmoothing: "antialiased",
+        fontSize: "16px",
+        "::placeholder": {
+          color: "#aab7c4"
+        }
+      },
+      invalid: {
+        color: "#fa755a",
+        iconColor: "#fa755a"
+      }
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmitPayment} className="space-y-4">
+      <Label htmlFor="card-element">Datos de la Tarjeta</Label>
+      <div className="p-3 border rounded-md bg-background">
+        <CardElement id="card-element" options={cardElementOptions} />
+      </div>
+      
+      {paymentError && (
+        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+          {paymentError}
+        </div>
+      )}
+
+      <Button 
+        type="submit"
+        className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
+        disabled={isLoadingPayment || !stripe || !elements}
+      >
+        {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
+        Finalizar Compra (Simulación)
+      </Button>
+    </form>
+  );
+}
+
     
