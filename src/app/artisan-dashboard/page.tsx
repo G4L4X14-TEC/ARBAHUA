@@ -209,7 +209,7 @@ export default function ArtisanDashboardPage() {
     setShowCreateEditStoreForm(false);
     toast({ 
       title: store?.id ? "Tienda Actualizada" : "Tienda Creada", 
-      description: \`Tu tienda "\${updatedStore.nombre}" ha sido \${store?.id ? 'actualizada' : 'creada'} con éxito.\`
+      description: `Tu tienda "${updatedStore.nombre}" ha sido ${store?.id ? 'actualizada' : 'creada'} con éxito.`
     });
   };
 
@@ -361,7 +361,7 @@ function CreateEditStoreForm({
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: \`Error al \${existingStore?.id ? 'actualizar' : 'crear'} la tienda\`,
+        title: `Error al ${existingStore?.id ? 'actualizar' : 'crear'} la tienda`,
         description: error.message || "Ocurrió un problema. Inténtalo de nuevo.",
       });
     } finally {
@@ -471,7 +471,7 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         <Image
           data-ai-hint="crafts store logo"
           src={store.logo_url || "https://placehold.co/300x200.png"}
-          alt={\`Logo de \${store.nombre}\`}
+          alt={`Logo de ${store.nombre}`}
           width={300}
           height={200}
           className="rounded-md object-cover h-40 w-full sm:w-auto sm:h-32 aspect-video mb-4 border"
@@ -482,11 +482,11 @@ function StoreDisplay({ store, onEditStore }: StoreDisplayProps) {
         </p>
         <p className="text-sm">
           Estado: 
-          <span className={\`font-semibold px-2 py-0.5 rounded-full text-xs \${
+          <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${
             store.estado === 'activa' 
               ? 'bg-green-100 text-green-700' 
               : 'bg-red-100 text-red-700'
-          }\`}>
+          }`}>
             {store.estado}
           </span>
         </p>
@@ -586,7 +586,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
           const { error: storageError } = await supabase.storage.from('product-images').remove(filePaths);
           if (storageError) {
             console.warn("[ProductManagement] Error deleting files from storage:", storageError.message);
-            toast({ title: "Advertencia", description: \`No se pudieron eliminar algunos archivos de imagen: \${storageError.message}\`, variant: "destructive" });
+            toast({ title: "Advertencia", description: `No se pudieron eliminar algunos archivos de imagen: ${storageError.message}`, variant: "destructive" });
           } else {
             console.log("[ProductManagement] Files deleted from storage successfully for product:", productToDelete.id);
           }
@@ -605,7 +605,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
 
       if (deleteImageDbError) {
         console.warn("[ProductManagement] Error deleting image records from DB:", deleteImageDbError.message);
-        toast({ title: "Advertencia", description: \`No se pudieron eliminar los registros de imágenes: \${deleteImageDbError.message}\`, variant: "destructive" });
+        toast({ title: "Advertencia", description: `No se pudieron eliminar los registros de imágenes: ${deleteImageDbError.message}`, variant: "destructive" });
       } else {
         console.log("[ProductManagement] Image records deleted from DB for product:", productToDelete.id);
       }
@@ -620,7 +620,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
       
       toast({ 
         title: "Producto Eliminado", 
-        description: \`"\${productToDelete.nombre}" ha sido eliminado.\`
+        description: `"${productToDelete.nombre}" ha sido eliminado.`
       });
       console.log("[ProductManagement] Product deleted successfully, fetching updated products list.");
       fetchProducts(); 
@@ -638,7 +638,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
   };
 
   const onProductSubmit = async (values: ProductFormValues) => {
-    console.log(\`[ProductManagement] Submitting product form. Artisan ID: \${artisanId}, Store ID: \${storeId}, Editing product ID: \${editingProduct?.id}\`, "Values:", values);
+    console.log(`[ProductManagement] Submitting product form. Artisan ID: ${artisanId}, Store ID: ${storeId}, Editing product ID: ${editingProduct?.id}`, "Values:", values);
     let productId = editingProduct?.id;
     let productUpdatedOrCreated = false;
 
@@ -681,13 +681,13 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
         throw new Error("No se pudo obtener el ID del producto después de guardarlo.");
       }
       productUpdatedOrCreated = true; 
-      console.log(\`[ProductManagement] Product \${editingProduct ? 'updated' : 'inserted'} successfully: ID \${productId}\`);
+      console.log(`[ProductManagement] Product ${editingProduct ? 'updated' : 'inserted'} successfully: ID ${productId}`);
       
       const imageFile = values.imagenFile?.[0];
       if (imageFile && productId) {
         console.log("[ProductManagement] Image file present. Uploading for productId:", productId, "File:", imageFile.name);
-        const fileName = \`\${Date.now()}_\${imageFile.name.replace(/\s+/g, '_')}\`;
-        const filePath = \`\${artisanId}/\${productId}/\${fileName}\`; 
+        const fileName = `${Date.now()}_${imageFile.name.replace(/s+/g, '_')}`;
+        const filePath = `${artisanId}/${productId}/${fileName}`; 
         
         console.log("[ProductManagement] Uploading image to path:", filePath);
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -739,7 +739,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
           console.error("[ProductManagement] Error inserting image record into DB:", imageDbError.message);
           console.warn("[ProductManagement] Attempting to remove uploaded file from storage due to DB error:", filePath);
           await supabase.storage.from('product-images').remove([filePath]); 
-          throw new Error(\`Error al guardar la información de la imagen: \${imageDbError.message}\`);
+          throw new Error(`Error al guardar la información de la imagen: ${imageDbError.message}`);
         }
         console.log("[ProductManagement] Image record inserted into DB successfully for productId:", productId, "New image record:", newImageRecord);
       }
@@ -747,7 +747,7 @@ function ProductManagement({ storeId, artisanId }: ProductManagementProps) {
       if (productUpdatedOrCreated) {
          toast({ 
           title: editingProduct ? "Producto Actualizado" : "Producto Creado", 
-          description: \`"\${productResult.data?.nombre}" ha sido \${editingProduct ? 'actualizado' : 'añadido'} \${imageFile ? 'con su imagen principal' : ''}.\`
+          description: `"${productResult.data?.nombre}" ha sido ${editingProduct ? 'actualizado' : 'añadido'} ${imageFile ? 'con su imagen principal' : ''}.`
         });
         setIsProductDialogOpen(false);
         setEditingProduct(null);
@@ -1116,4 +1116,4 @@ function ProductFormDialog({
 }
     
 
-    me parece que este es el codigo que esta bien o no?
+    
