@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -5,12 +6,12 @@ import { cookies } from 'next/headers';
 import type { Tables, Database, Json, TablesInsert } from '@/lib/supabase/database.types';
 import * as z from "zod";
 
-// Re-definimos el esquema aquí o lo importamos de un lugar compartido si se usa en más sitios.
-// Por ahora, lo redefinimos para mantener la acción autocontenida.
+// Esquema Zod para el formulario de envío (consistente con el de la página de checkout)
 const shippingFormSchema = z.object({
   nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
   direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
+  estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}),
   codigoPostal: z.string().regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
   pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
   telefono: z.string().regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
@@ -20,7 +21,6 @@ type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
 // Helper para crear el cliente de Supabase en Server Actions
 // Esta función es similar a la de cartPageActions.ts y homePageActions.ts
-// Considerar moverla a un archivo de utilidad compartido si se repite mucho.
 function createSupabaseServerClientAction() {
   const cookieStore = cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -70,62 +70,79 @@ export async function saveShippingAddressAction(
   }
   console.log('[saveShippingAddressAction] User ID:', user.id);
 
-  // Mapeo de los campos del formulario a las columnas de la tabla 'direcciones'
-  // IMPORTANTE: Asegúrate que tu tabla 'direcciones' tenga estas columnas o ajústalas.
-  // Según tu esquema anterior, 'direcciones' tiene: id, cliente_id, calle, ciudad, estado, codigo_postal, pais.
-  // Faltarían 'nombre_completo_destinatario' y 'telefono_contacto'. Asumiré que las añadirás.
-  // Si no las añades, la inserción fallará o estos campos serán ignorados por Supabase si no existen.
-  const insertPayload: TablesInsert<'direcciones'> = {
-    cliente_id: user.id,
-    calle: addressData.direccion,
-    ciudad: addressData.ciudad,
-    codigo_postal: addressData.codigoPostal,
-    pais: addressData.pais,
-    // Los siguientes campos dependen de que los hayas añadido a tu tabla 'direcciones'
-    // Si no los tienes, comenta o elimina estas líneas:
-    // nombre_completo_destinatario: addressData.nombreCompleto, // Ejemplo, ajusta el nombre de columna
-    // telefono_contacto: addressData.telefono,                 // Ejemplo, ajusta el nombre de columna
-    
-    // Si tu tabla 'direcciones' TIENE columnas llamadas 'nombre' y 'telefono' (o similar para estos datos)
-    // entonces deberías mapearlos aquí. Por ahora, solo uso los campos que coinciden con tu 'Direccion' interface.
-    // El estado no lo guardamos aquí, ya que no es parte del formulario de dirección.
+  // Normalizar datos para comparación y guardado
+  const normalizedAddressData = {
+    calle: addressData.direccion.trim(),
+    ciudad: addressData.ciudad.trim(),
+    estado: addressData.estado.trim(), // Asegúrate que tu formulario tenga un campo 'estado'
+    codigo_postal: addressData.codigoPostal.trim(),
+    pais: addressData.pais.trim(),
+    // Campos que dependen de que los hayas añadido a tu tabla 'direcciones'
+    // nombre_completo_destinatario: addressData.nombreCompleto.trim(), 
+    // telefono_contacto: addressData.telefono.trim(),
   };
-  
-  // Para adaptarnos a tu schema actual de 'direcciones' que no tiene nombre_completo ni telefono directamente:
-  // Si más adelante los añades, necesitarás descomentar y ajustar el payload.
-  // Por ahora, el payload se verá así:
-  const currentSchemaPayload: TablesInsert<'direcciones'> = {
-    cliente_id: user.id,
-    calle: addressData.direccion, // 'direccion' del form a 'calle' en DB
-    ciudad: addressData.ciudad,
-    estado: addressData.ciudad, // Asumiendo que 'ciudad' y 'estado' podrían ser lo mismo o necesitas un campo 'estado' en el form
-    codigo_postal: addressData.codigoPostal,
-    pais: addressData.pais,
-  };
-  // **CORRECCIÓN IMPORTANTE**: Necesitas un campo para 'estado' en tu formulario
-  // o decidir cómo mapearlo. Por ahora, usaré ciudad para estado, pero deberías ajustarlo.
-
-  console.log('[saveShippingAddressAction] Payload for DB insert:', currentSchemaPayload);
 
   try {
-    const { data, error } = await supabase
+    // 1. Verificar si ya existe una dirección idéntica para este usuario
+    console.log('[saveShippingAddressAction] Checking for existing identical address for user:', user.id);
+    const { data: existingAddress, error: selectError } = await supabase
       .from('direcciones')
-      .insert(currentSchemaPayload) // Usamos el payload ajustado
-      .select('id') // Seleccionamos el ID de la dirección insertada
-      .single();
+      .select('id')
+      .eq('cliente_id', user.id)
+      .eq('calle', normalizedAddressData.calle)
+      .eq('ciudad', normalizedAddressData.ciudad)
+      .eq('estado', normalizedAddressData.estado) // Comparar también por estado
+      .eq('codigo_postal', normalizedAddressData.codigo_postal)
+      .eq('pais', normalizedAddressData.pais)
+      // Si tienes nombre_completo_destinatario y telefono_contacto en la tabla, añádelos a la comparación:
+      // .eq('nombre_completo_destinatario', normalizedAddressData.nombre_completo_destinatario)
+      // .eq('telefono_contacto', normalizedAddressData.telefono_contacto)
+      .maybeSingle();
 
-    if (error) {
-      console.error('[saveShippingAddressAction] Error inserting address:', error);
-      return { success: false, message: `Error al guardar la dirección: ${error.message}` };
+    if (selectError) {
+      console.error('[saveShippingAddressAction] Error checking for existing address:', selectError);
+      return { success: false, message: `Error al verificar la dirección: ${selectError.message}` };
     }
 
-    if (!data || !data.id) {
+    if (existingAddress) {
+      console.log('[saveShippingAddressAction] Identical address already exists for user:', user.id, 'Address ID:', existingAddress.id);
+      return { success: true, addressId: existingAddress.id, message: 'Se utilizará una dirección de envío existente idéntica.' };
+    }
+
+    // 2. Si no existe, insertar la nueva dirección
+    console.log('[saveShippingAddressAction] No identical address found, inserting new address for user:', user.id);
+    const insertPayload: TablesInsert<'direcciones'> = {
+      cliente_id: user.id,
+      calle: normalizedAddressData.calle,
+      ciudad: normalizedAddressData.ciudad,
+      estado: normalizedAddressData.estado,
+      codigo_postal: normalizedAddressData.codigo_postal,
+      pais: normalizedAddressData.pais,
+      // Si tienes las columnas en la DB, añade aquí los campos del formulario que faltan:
+      // nombre_completo_destinatario: addressData.nombreCompleto, 
+      // telefono_contacto: addressData.telefono,
+    };
+    
+    console.log('[saveShippingAddressAction] Payload for DB insert:', insertPayload);
+
+    const { data: newAddress, error: insertError } = await supabase
+      .from('direcciones')
+      .insert(insertPayload)
+      .select('id')
+      .single();
+
+    if (insertError) {
+      console.error('[saveShippingAddressAction] Error inserting address:', insertError);
+      return { success: false, message: `Error al guardar la dirección: ${insertError.message}` };
+    }
+
+    if (!newAddress || !newAddress.id) {
       console.error('[saveShippingAddressAction] No data or addressId returned after insert.');
       return { success: false, message: 'No se pudo obtener el ID de la dirección guardada.' };
     }
 
-    console.log('[saveShippingAddressAction] Address saved successfully with ID:', data.id);
-    return { success: true, addressId: data.id, message: 'Dirección de envío guardada correctamente.' };
+    console.log('[saveShippingAddressAction] Address saved successfully with ID:', newAddress.id);
+    return { success: true, addressId: newAddress.id, message: 'Dirección de envío guardada correctamente.' };
 
   } catch (e: any) {
     console.error("[saveShippingAddressAction] Critical error in action:", e.message);

@@ -23,7 +23,7 @@ import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home as Ho
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
 import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
-import { useForm, FormProvider } from "react-hook-form"; // Añadido FormProvider
+import { useForm, FormProvider, useFormContext } from "react-hook-form"; // Añadido FormProvider
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
