@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home as HomeIcon, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
+import { getCartItemsAction, type CartItemForDisplay, clearCartAction } from "@/app/actions/cartPageActions";
 import { saveShippingAddressAction, createPaymentIntentAction, createOrderAction } from "@/app/actions/checkoutActions"; 
 import { useForm, FormProvider, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,7 +32,7 @@ import {
   FormField,
   FormItem,
   FormMessage,
-  FormLabel, // Añadido FormLabel que faltaba
+  FormLabel,
 } from "@/components/ui/form";
 import {
   Select,
@@ -225,6 +225,7 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0 && typeof window !== 'undefined' && window.location.pathname === '/checkout') {
+    // Este caso debería ser manejado por la redirección en fetchCart, pero es una salvaguarda
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -264,7 +265,7 @@ export default function CheckoutPage() {
           <section className="lg:col-span-2 space-y-8">
             <ShippingForm 
               onSubmitSuccess={handleShippingSubmitSuccess}
-              isSubmittingParent={isSavingAddress} 
+              isSubmittingParent={isSavingAddress || shippingForm.formState.isSubmitting} 
             />
             
             {isShippingFormValidAndSubmitted && shippingData && savedAddressId && cartItems.length > 0 && (
@@ -273,9 +274,9 @@ export default function CheckoutPage() {
                   isShippingComplete={isShippingFormValidAndSubmitted}
                   shippingValues={shippingData}
                   userEmail={user?.email || 'no-email@example.com'}
-                  cartItems={cartItems} // Pasar cartItems
-                  savedAddressId={savedAddressId} // Pasar savedAddressId
-                  totalAmountInCents={Math.round(calculateTotal() * 100)} // Pasar el monto total
+                  cartItems={cartItems} 
+                  savedAddressId={savedAddressId} 
+                  totalAmountInCents={Math.round(calculateTotal() * 100)} 
                 />
               </div>
             )}
@@ -316,13 +317,13 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
                 <p className="text-xs text-muted-foreground">Cantidad: {item.cantidad}</p>
               </div>
             </div>
-            <p className="font-medium text-foreground">MXN${item.subtotal.toFixed(2)}</p>
+            <p className="font-medium text-foreground">MXN\${item.subtotal.toFixed(2)}</p>
           </div>
         ))}
         <Separator />
         <div className="flex justify-between font-semibold text-lg">
           <span>Total:</span>
-          <span>MXN${total.toFixed(2)}</span>
+          <span>MXN\${total.toFixed(2)}</span>
         </div>
       </CardContent>
     </Card>
@@ -433,6 +434,7 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
                         </FormControl>
                         <SelectContent>
                         <SelectItem value="México">México</SelectItem>
+                        {/* Puedes añadir más países aquí */}
                         </SelectContent>
                     </Select>
                     <FormMessage />
@@ -456,9 +458,9 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
              <Button 
               type="submit" 
               className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={!form.formState.isValid || isSubmittingParent || form.formState.isSubmitting}
+              disabled={!form.formState.isValid || isSubmittingParent}
             >
-              {isSubmittingParent || form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isSubmittingParent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Guardar Dirección y Continuar al Pago
             </Button>
           </form>
@@ -484,9 +486,9 @@ function PaymentSection({
   savedAddressId,
   totalAmountInCents
 }: PaymentSectionProps) {
-  const { toast } = useToast(); // Obtenemos toast aquí si se usa en StripePaymentForm
+  const { toast } = useToast(); // Obtener toast aquí
 
-  if (!stripePromise) {
+  if (!stripePromise && typeof window !== 'undefined') {
      console.error("Stripe.js no se ha cargado. Clave publicable podría estar faltando.");
      return (
       <Card className="shadow-lg mt-8">
@@ -497,7 +499,7 @@ function PaymentSection({
         </CardHeader>
         <CardContent>
           <p>
-            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada en tus variables de entorno (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
+            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada.
           </p>
         </CardContent>
       </Card>
@@ -515,6 +517,7 @@ function PaymentSection({
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {stripePromise ? (
           <Elements stripe={stripePromise}>
             <StripePaymentForm 
                 shippingValues={shippingValues} 
@@ -525,6 +528,9 @@ function PaymentSection({
                 totalAmountInCents={totalAmountInCents}
             />
           </Elements>
+        ) : (
+          <p className="text-center text-muted-foreground">Inicializando pasarela de pago...</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -553,13 +559,13 @@ function StripePaymentForm({
   const router = useRouter();
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
-  const shippingFormContext = useFormContext<ShippingFormValues>(); // Para acceder al estado del formulario de envío
+  const shippingFormContext = useFormContext<ShippingFormValues>(); 
 
   const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPaymentError(null);
 
-    if (!isShippingComplete || !shippingFormContext.formState.isValid) { // Doble verificación
+    if (!isShippingComplete || !shippingFormContext.formState.isValid) { 
       toast({ title: "Información Incompleta", description: "Completa y guarda tu dirección de envío antes de pagar.", variant: "destructive" });
       return;
     }
@@ -593,7 +599,7 @@ function StripePaymentForm({
         setIsLoadingPayment(false);
         return;
       }
-      console.log("[StripePaymentForm] Payment Intent creado, clientSecret:", intentResult.clientSecret.substring(0,15) + "...");
+      console.log("[StripePaymentForm] Payment Intent creado.");
 
       console.log("[StripePaymentForm] 2. Confirmando pago con tarjeta...");
       const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
@@ -626,7 +632,7 @@ function StripePaymentForm({
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        console.log("[StripePaymentForm] ¡Pago exitoso! PaymentIntent ID:", paymentIntent.id, "Monto:", paymentIntent.amount);
+        console.log("[StripePaymentForm] ¡Pago exitoso! PaymentIntent ID:", paymentIntent.id);
         
         console.log("[StripePaymentForm] 3. Creando orden en la base de datos...");
         const orderResult = await createOrderAction(
@@ -639,21 +645,29 @@ function StripePaymentForm({
         if (orderResult.success && orderResult.orderId) {
           toast({
             title: "¡Pedido Creado Exitosamente!",
-            description: `Gracias por tu compra. Tu ID de orden es: ${orderResult.orderId}.`,
+            description: \`Gracias por tu compra. Tu ID de orden es: \${orderResult.orderId}.\`,
             duration: 7000,
           });
-          // TODO: Limpiar el carrito del usuario.
+          
+          console.log("[StripePaymentForm] 4. Limpiando carrito...");
+          const clearCartResult = await clearCartAction();
+          if (clearCartResult.success) {
+            toast({ title: "Carrito Limpio", description: clearCartResult.message, duration: 3000 });
+          } else {
+            toast({ title: "Advertencia", description: \`No se pudo limpiar el carrito automáticamente: \${clearCartResult.message}\`, variant: "default", duration: 5000 });
+          }
+          
           // TODO: Redirigir a una página de confirmación de orden.
-          // router.push(`/order-confirmation/${orderResult.orderId}`); 
+          // router.push(\`/order-confirmation/\${orderResult.orderId}\`); 
           router.push('/user-profile?order_success=true'); // Redirigir al perfil por ahora
         } else {
           console.error("[StripePaymentForm] Error creando orden en la base de datos:", orderResult.message);
-          setPaymentError(`El pago fue exitoso, pero hubo un problema al registrar tu orden: ${orderResult.message}. Por favor, contacta a soporte.`);
-          toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado, pero no pudimos registrar tu orden. Por favor, contacta a soporte con el ID de transacción: ${paymentIntent.id}`, variant: "destructive", duration: 10000 });
+          setPaymentError(\`El pago fue exitoso, pero hubo un problema al registrar tu orden: \${orderResult.message}. Por favor, contacta a soporte.\`);
+          toast({ title: "Error Crítico al Registrar Orden", description: \`Tu pago fue procesado, pero no pudimos registrar tu orden. Por favor, contacta a soporte con el ID de transacción: \${paymentIntent.id}\`, variant: "destructive", duration: 10000 });
         }
       } else {
         console.warn("[StripePaymentForm] Estado del PaymentIntent no exitoso:", paymentIntent?.status);
-        const errorMessage = paymentIntent?.last_payment_error?.message || `Estado del pago: ${paymentIntent?.status}. Por favor, intenta de nuevo.`;
+        const errorMessage = paymentIntent?.last_payment_error?.message || \`Estado del pago: \${paymentIntent?.status}. Por favor, intenta de nuevo.\`;
         setPaymentError(errorMessage);
         toast({ title: "Estado del Pago Incierto", description: errorMessage, variant: "destructive"});
       }
@@ -709,5 +723,5 @@ function StripePaymentForm({
     </form>
   );
 }
-```
-Ya arreglaste el error que no generaba, tambien ya esta funcional ahora que sigue
+
+```este es el codigo que tengo en checkout, ahora que sigue
