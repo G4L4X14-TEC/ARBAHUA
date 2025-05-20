@@ -3,9 +3,10 @@
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import type { Tables, Database, Json } from '@/lib/supabase/database.types';
+import type { Tables, Database, Json, TablesUpdate } from '@/lib/supabase/database.types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import type { ShippingFormValues } from '@/app/checkout/page'; // Asumiendo que se exporta
 
 export type UserOrderForDisplay = Pick<Tables<'pedidos'>, 'id' | 'total' | 'estado' | 'fecha_pedido'> & {
   formatted_date: string;
@@ -60,7 +61,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
   try {
     const { data: ordersData, error: ordersError } = await supabase
       .from('pedidos')
-      .select(`
+      .select(\`
         id,
         total,
         estado,
@@ -72,13 +73,13 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
             nombre
           )
         )
-      `)
+      \`)
       .eq('cliente_id', user.id)
       .order('fecha_pedido', { ascending: false });
 
     if (ordersError) {
       console.error('[getUserOrdersAction] Error fetching orders:', ordersError.message);
-      throw ordersError; // Opcional: relanzar para que el llamador maneje o simplemente retornar []
+      throw ordersError; 
     }
 
     if (!ordersData) {
@@ -86,7 +87,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
       return [];
     }
 
-    console.log(`[getUserOrdersAction] Fetched ${ordersData.length} orders.`);
+    console.log(\`[getUserOrdersAction] Fetched \${ordersData.length} orders.\`);
 
     const displayedOrders: UserOrderForDisplay[] = ordersData.map(order => {
       let itemsSummary = 'Múltiples productos';
@@ -95,7 +96,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
       if (detalleArray.length > 0) {
         const firstDetailItem = detalleArray[0] as unknown as { productos: { nombre: string } | null, cantidad: number }; 
         if (firstDetailItem && firstDetailItem.productos) {
-          itemsSummary = `${firstDetailItem.productos.nombre}${detalleArray.length > 1 ? ' y más...' : ''}`;
+          itemsSummary = \`\${firstDetailItem.productos.nombre}\${detalleArray.length > 1 ? ' y más...' : ''}\`;
         } else {
           itemsSummary = 'Detalles del producto no disponibles';
         }
@@ -142,7 +143,7 @@ export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]>
       .from('direcciones')
       .select('*')
       .eq('cliente_id', user.id)
-      .order('calle', { ascending: true }); // O cualquier otro orden que prefieras
+      .order('calle', { ascending: true }); 
 
     if (addressesError) {
       console.error('[getUserAddressesAction] Error fetching addresses:', addressesError.message);
@@ -154,11 +155,94 @@ export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]>
       return [];
     }
 
-    console.log(`[getUserAddressesAction] Fetched ${addressesData.length} addresses.`);
+    console.log(\`[getUserAddressesAction] Fetched \${addressesData.length} addresses.\`);
     return addressesData;
 
   } catch (e: any) {
-    console.error("[getUserAddressesAction] Critical error in action:", e.message); // Corregido aquí
+    console.error("[getUserAddressesAction] Critical error in action:", e.message);
     return [];
   }
 }
+
+export async function updateUserAddressAction(
+  addressId: string,
+  addressData: ShippingFormValues 
+): Promise<{ success: boolean; message: string }> {
+  console.log('[updateUserAddressAction] Attempting to update address ID:', addressId, 'with data:', addressData);
+  const supabase = await createSupabaseServerClientAction();
+  if (!supabase) {
+    return { success: false, message: "Error de conexión con el servidor." };
+  }
+
+  const { data: { user }, error: userAuthError } = await supabase.auth.getUser();
+  if (userAuthError || !user) {
+    console.error('[updateUserAddressAction] User not authenticated.');
+    return { success: false, message: "Debes iniciar sesión para actualizar una dirección." };
+  }
+
+  // Mapeo de ShippingFormValues a TablesUpdate<'direcciones'>
+  // Asegúrate de que los nombres de campo coincidan con tu tabla 'direcciones'
+  // y que los campos de 'addressData' (como nombreCompleto y telefono) tengan columnas correspondientes.
+  const updatePayload: TablesUpdate<'direcciones'> = {
+    calle: addressData.direccion,
+    ciudad: addressData.ciudad,
+    estado: addressData.estado, 
+    codigo_postal: addressData.codigoPostal,
+    pais: addressData.pais,
+    // Si tienes estas columnas en tu tabla 'direcciones':
+    // nombre_completo_destinatario: addressData.nombreCompleto,
+    // telefono_contacto: addressData.telefono,
+  };
+
+  try {
+    const { error } = await supabase
+      .from('direcciones')
+      .update(updatePayload)
+      .eq('id', addressId)
+      .eq('cliente_id', user.id); // Muy importante para asegurar que el usuario solo actualice sus propias direcciones
+
+    if (error) {
+      console.error('[updateUserAddressAction] Error updating address:', error.message);
+      return { success: false, message: `Error al actualizar la dirección: ${error.message}` };
+    }
+
+    console.log('[updateUserAddressAction] Address updated successfully for ID:', addressId);
+    return { success: true, message: 'Dirección actualizada correctamente.' };
+  } catch (e: any) {
+    console.error('[updateUserAddressAction] Critical error:', e.message);
+    return { success: false, message: `Error inesperado al actualizar la dirección: ${e.message}` };
+  }
+}
+
+export async function deleteUserAddressAction(
+  addressId: string
+): Promise<{ success: boolean; message: string }> {
+  console.log('[deleteUserAddressAction] Attempting to delete address ID:', addressId);
+  const supabase = await createSupabaseServerClientAction();
+  if (!supabase) {
+    return { success: false, message: "Error de conexión con el servidor." };
+  }
+
+  const { data: { user }, error: userAuthError } = await supabase.auth.getUser();
+  if (userAuthError || !user) {
+    console.error('[deleteUserAddressAction] User not authenticated.');
+    return { success: false, message: "Debes iniciar sesión para eliminar una dirección." };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('direcciones')
+      .delete()
+      .eq('id', addressId)
+      .eq('cliente_id', user.id); // Muy importante para asegurar que solo elimine sus propias direcciones
+
+    if (error) {
+      console.error('[deleteUserAddressAction] Error deleting address:', error.message);
+      return { success: false, message: `Error al eliminar la dirección: ${error.message}` };
+    }
+
+    console.log('[deleteUserAddressAction] Address deleted successfully for ID:', addressId);
+    return { success: true, message: 'Dirección eliminada correctamente.' };
+  } catch (e: any) {
+    console.error('[deleteUserAddressAction] Critical error:', e.message);
+    return { success: false, message: `Error inesperado al eliminar la dirección

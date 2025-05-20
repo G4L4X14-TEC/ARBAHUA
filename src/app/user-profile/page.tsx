@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   Form, 
   FormControl, 
-  FormProvider, // Añadido
+  FormProvider,
   FormField, 
   FormItem, 
   FormLabel, 
@@ -35,6 +35,16 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog"; 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogFooter,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -59,7 +69,8 @@ import {
   Settings,
   KeyRound,
   Edit3,
-  PlusCircle 
+  PlusCircle,
+  Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables, TablesInsert } from "@/lib/supabase/database.types"; 
@@ -67,12 +78,17 @@ import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getUserOrdersAction, getUserAddressesAction, type UserOrderForDisplay } from "@/app/actions/userProfileActions";
+import { 
+  getUserOrdersAction, 
+  getUserAddressesAction, 
+  updateUserAddressAction, 
+  deleteUserAddressAction, 
+  type UserOrderForDisplay 
+} from "@/app/actions/userProfileActions";
 import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
 import { shippingFormSchema, type ShippingFormValues } from "@/app/checkout/page"; 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-
 
 export default function UserProfilePage() {
   const router = useRouter();
@@ -92,16 +108,67 @@ export default function UserProfilePage() {
   const [addresses, setAddresses] = React.useState<Tables<'direcciones'>[]>([]);
   const [isLoadingAddresses, setIsLoadingAddresses] = React.useState(true);
   const [errorAddresses, setErrorAddresses] = React.useState<string | null>(null);
-  const [isAddAddressDialogOpen, setIsAddAddressDialogOpen] = React.useState(false);
   
+  const [isAddressDialogOpen, setIsAddressDialogOpen] = React.useState(false);
+  const [editingAddress, setEditingAddress] = React.useState<Tables<'direcciones'> | null>(null);
+  
+  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = React.useState(false);
+  const [addressToDelete, setAddressToDelete] = React.useState<Tables<'direcciones'> | null>(null);
 
   React.useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL para que no se muestre en recargas
       // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
+
+  const fetchUserData = React.useCallback(async () => {
+    setIsLoading(true);
+    const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !authUser) {
+      toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para ver tu perfil.", variant: "destructive" });
+      router.push("/login?redirect=/user-profile");
+      return;
+    }
+    setUser(authUser);
+
+    const { data: profileData, error: profileError } = await supabase
+      .from("usuarios")
+      .select("*")
+      .eq("id", authUser.id)
+      .single();
+
+    if (profileError || !profileData) {
+      toast({ title: "Error de Perfil", description: \`No se pudo cargar tu perfil: \${profileError?.message || 'Error desconocido'}\`, variant: "destructive" });
+      setProfile(null); 
+    } else {
+      setProfile(profileData);
+    }
+    setIsLoading(false);
+  }, [supabase, router, toast]);
+
+  React.useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+  
+  const fetchOrders = React.useCallback(async () => {
+    if (!user || !profile) return;
+    console.log('[UserProfilePage] Fetching orders for user:', user.id);
+    setIsLoadingOrders(true);
+    setErrorOrders(null);
+    try {
+      const userOrders = await getUserOrdersAction();
+      console.log('[UserProfilePage] Orders received:', userOrders);
+      setOrders(userOrders);
+    } catch (err: any) {
+      console.error('[UserProfilePage] Error fetching orders:', err);
+      setErrorOrders("No se pudieron cargar tus pedidos.");
+      toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema.", variant: "destructive" });
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  }, [user, profile, toast]);
 
   const fetchAddresses = React.useCallback(async () => {
     if (!profile) return;
@@ -122,59 +189,11 @@ export default function UserProfilePage() {
   }, [profile, toast]);
 
   React.useEffect(() => {
-    const fetchUserData = async () => {
-      setIsLoading(true);
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-
-      if (authError || !authUser) {
-        toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para ver tu perfil.", variant: "destructive" });
-        router.push("/login?redirect=/user-profile");
-        return;
-      }
-      setUser(authUser);
-
-      const { data: profileData, error: profileError } = await supabase
-        .from("usuarios")
-        .select("*")
-        .eq("id", authUser.id)
-        .single();
-
-      if (profileError) {
-        toast({ title: "Error de Perfil", description: `No se pudo cargar tu perfil: ${profileError.message}`, variant: "destructive" });
-        setProfile(null); 
-      } else if (!profileData) {
-        toast({ title: "Perfil No Encontrado", description: "No se encontraron datos de perfil para tu cuenta.", variant: "destructive" });
-        setProfile(null);
-      } else {
-        setProfile(profileData);
-      }
-      setIsLoading(false);
-    };
-    fetchUserData();
-  }, [supabase, router, toast]);
-
-  React.useEffect(() => {
     if (user && profile && !isLoading) { 
-      const fetchOrders = async () => {
-        console.log('[UserProfilePage] Fetching orders for user:', user.id);
-        setIsLoadingOrders(true);
-        setErrorOrders(null);
-        try {
-          const userOrders = await getUserOrdersAction();
-          console.log('[UserProfilePage] Orders received:', userOrders);
-          setOrders(userOrders);
-        } catch (err: any) {
-          console.error('[UserProfilePage] Error fetching orders:', err);
-          setErrorOrders("No se pudieron cargar tus pedidos.");
-          toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema.", variant: "destructive" });
-        } finally {
-          setIsLoadingOrders(false);
-        }
-      };
       fetchOrders();
       fetchAddresses(); 
     }
-  }, [user, profile, isLoading, toast, fetchAddresses]); 
+  }, [user, profile, isLoading, fetchOrders, fetchAddresses]); 
 
   const handleSignOut = async () => {
     setIsLoading(true); 
@@ -187,8 +206,8 @@ export default function UserProfilePage() {
   const getOrderStatusBadgeVariant = (status?: Tables<'pedidos'>['estado'] | null): "default" | "secondary" | "destructive" | "outline" => {
     if (!status) return 'outline';
     switch (status) {
-      case 'Pagado': // Añadido para manejar el nuevo estado
-        return 'default'; // Verde para 'Pagado' (asumiendo que tu 'default' es verde o primario)
+      case 'Pagado':
+        return 'default'; 
       case 'Enviado':
       case 'Entregado':
         return 'default'; 
@@ -197,17 +216,44 @@ export default function UserProfilePage() {
       case 'Cancelado':
         return 'destructive';
       default:
-        // Para manejar cualquier estado futuro o inesperado
         const _exhaustiveCheck: never = status;
         return 'outline';
     }
   };
 
-  const handleAddressAdded = () => {
-    fetchAddresses(); // Recargar la lista de direcciones
-    setIsAddAddressDialogOpen(false); // Cerrar el diálogo
+  const handleOpenAddAddressDialog = () => {
+    setEditingAddress(null); // Asegurarse de que no estamos editando
+    setIsAddressDialogOpen(true);
   };
 
+  const handleOpenEditAddressDialog = (address: Tables<'direcciones'>) => {
+    setEditingAddress(address);
+    setIsAddressDialogOpen(true);
+  };
+  
+  const handleAddressSavedOrUpdated = () => {
+    fetchAddresses();
+    setIsAddressDialogOpen(false);
+    setEditingAddress(null);
+  };
+
+  const handleDeleteAddress = (address: Tables<'direcciones'>) => {
+    setAddressToDelete(address);
+    setIsConfirmDeleteDialogOpen(true);
+  };
+
+  const onConfirmDeleteAddress = async () => {
+    if (!addressToDelete) return;
+    const result = await deleteUserAddressAction(addressToDelete.id);
+    if (result.success) {
+      toast({ title: "Dirección Eliminada", description: result.message });
+      fetchAddresses();
+    } else {
+      toast({ title: "Error al Eliminar", description: result.message, variant: "destructive" });
+    }
+    setIsConfirmDeleteDialogOpen(false);
+    setAddressToDelete(null);
+  };
 
   if (isLoading) {
     return (
@@ -316,19 +362,6 @@ export default function UserProfilePage() {
                 </CardContent>
               </Card>
             )}
-             {/* Sección Mis Favoritos (Placeholder) */}
-            <Card className="shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
-                  <Heart className="h-5 w-5" /> Mis Favoritos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Próximamente: Aquí podrás ver los productos que has marcado como favoritos.
-                </p>
-              </CardContent>
-            </Card>
           </section>
 
           {/* Columna de Historial de Pedidos y Direcciones */}
@@ -367,7 +400,7 @@ export default function UserProfilePage() {
                         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-muted/30 gap-2">
                           <div>
                             <p className="text-sm font-medium text-foreground">
-                              Pedido <span className="text-primary">#{order.id.substring(0, 8).toUpperCase()}</span>
+                              Pedido <span className="text-primary">#\${order.id.substring(0, 8).toUpperCase()}</span>
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {order.formatted_date}
@@ -379,7 +412,7 @@ export default function UserProfilePage() {
                         </CardHeader>
                         <CardContent className="p-4 space-y-2">
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> MXN${order.total.toFixed(2)}
+                            <span className="font-medium">Total:</span> MXN\${order.total.toFixed(2)}
                           </p>
                           <p className="text-sm text-muted-foreground italic">
                             <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
@@ -410,7 +443,7 @@ export default function UserProfilePage() {
                   <MapPin className="h-5 w-5" />
                   Mis Direcciones
                 </CardTitle>
-                <Button size="sm" onClick={() => setIsAddAddressDialogOpen(true)}>
+                <Button size="sm" onClick={handleOpenAddAddressDialog}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Añadir Dirección
                 </Button>
               </CardHeader>
@@ -433,20 +466,22 @@ export default function UserProfilePage() {
                     {addresses.map((address) => (
                       <Card key={address.id} className="p-4 text-sm border">
                         <p className="font-semibold">{address.calle}</p>
-                        <p>{address.ciudad}, {address.estado}</p>
-                        <p>{address.codigo_postal}, {address.pais}</p>
-                        {/* Podríamos añadir botones de Editar/Eliminar aquí en el futuro */}
+                        <p>{address.ciudad}, {address.estado || 'N/A'}, {address.codigo_postal}</p>
+                        <p>{address.pais}</p>
+                        <div className="mt-2 flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleOpenEditAddressDialog(address)}>
+                            <Edit3 className="mr-1 h-3 w-3" /> Editar
+                          </Button>
+                          <Button variant="destructive" size="sm" onClick={() => handleDeleteAddress(address)}>
+                            <Trash2 className="mr-1 h-3 w-3" /> Eliminar
+                          </Button>
+                        </div>
                       </Card>
                     ))}
                   </div>
                 )}
               </CardContent>
             </Card>
-            <AddAddressDialog
-              isOpen={isAddAddressDialogOpen}
-              onOpenChange={setIsAddAddressDialogOpen}
-              onAddressAdded={handleAddressAdded}
-            />
             <Card className="shadow-xl">
               <CardHeader>
                 <CardTitle className="text-xl text-earthy-green flex items-center gap-2"><Settings className="h-5 w-5" />Preferencias de la Cuenta</CardTitle>
@@ -457,76 +492,141 @@ export default function UserProfilePage() {
             </Card>
           </section>
         </div>
+        
+        <AddressDialog
+          isOpen={isAddressDialogOpen}
+          onOpenChange={setIsAddressDialogOpen}
+          onAddressSavedOrUpdated={handleAddressSavedOrUpdated}
+          existingAddress={editingAddress}
+        />
+
+        <AlertDialog open={isConfirmDeleteDialogOpen} onOpenChange={setIsConfirmDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="text-destructive h-5 w-5" />
+                ¿Confirmas la eliminación?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Se eliminará permanentemente la dirección: <br />
+                <strong>{addressToDelete?.calle}, {addressToDelete?.ciudad}</strong>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setAddressToDelete(null)}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={onConfirmDeleteAddress} 
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              >
+                Sí, eliminar dirección
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </main>
     </TooltipProvider>
   );
 }
 
-interface AddAddressDialogProps {
+interface AddressDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onAddressAdded: () => void;
+  onAddressSavedOrUpdated: () => void;
+  existingAddress: Tables<'direcciones'> | null;
 }
 
-function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDialogProps) {
+function AddressDialog({ 
+  isOpen, 
+  onOpenChange, 
+  onAddressSavedOrUpdated, 
+  existingAddress 
+}: AddressDialogProps) {
   const { toast } = useToast();
   const [isSubmittingAddress, setIsSubmittingAddress] = React.useState(false);
 
-  const formMethods = useForm<ShippingFormValues>({ // Cambiado para no colisionar con 'form' del componente padre
+  const formMethods = useForm<ShippingFormValues>({ 
     resolver: zodResolver(shippingFormSchema),
     defaultValues: {
-      nombreCompleto: "", // Asumiendo que estos campos existen en ShippingFormValues
+      nombreCompleto:  "", // Asumiendo que estos no están en 'direcciones' pero sí en el form
       direccion: "",
       ciudad: "",
       estado: "",
       codigoPostal: "",
       pais: "México", 
-      telefono: "", // Asumiendo que estos campos existen en ShippingFormValues
+      telefono: "", // Asumiendo que estos no están en 'direcciones' pero sí en el form
     },
   });
 
+  React.useEffect(() => {
+    if (existingAddress) {
+      formMethods.reset({
+        nombreCompleto: existingAddress.nombre_completo_destinatario || "",
+        direccion: existingAddress.calle || "",
+        ciudad: existingAddress.ciudad || "",
+        estado: existingAddress.estado || "",
+        codigoPostal: existingAddress.codigo_postal || "",
+        pais: existingAddress.pais || "México",
+        telefono: existingAddress.telefono_contacto || "",
+      });
+    } else {
+      formMethods.reset({ // Resetear a valores por defecto para un nuevo formulario
+        nombreCompleto: "",
+        direccion: "",
+        ciudad: "",
+        estado: "",
+        codigoPostal: "",
+        pais: "México",
+        telefono: "",
+      });
+    }
+  }, [existingAddress, formMethods]);
+
   const handleAddressSubmit = async (data: ShippingFormValues) => {
     setIsSubmittingAddress(true);
-    console.log("[AddAddressDialog] Submitting new address:", data);
-    try {
-        const result = await saveShippingAddressAction(data); // Esta acción ya existe en checkoutActions
-
-        if (result.success) {
-        toast({
-            title: "Dirección Guardada",
-            description: result.message || "Tu nueva dirección ha sido guardada.",
-        });
-        formMethods.reset(); // Resetear el formulario específico de este diálogo
-        onAddressAdded(); 
-        } else {
-        toast({
-            title: "Error al Guardar Dirección",
-            description: result.message || "No se pudo guardar la dirección.",
-            variant: "destructive",
-        });
-        }
-    } catch (error: any) {
-        toast({
-            title: "Error Inesperado",
-            description: error.message || "Ocurrió un error al guardar la dirección.",
-            variant: "destructive",
-        });
-    } finally {
-        setIsSubmittingAddress(false);
+    console.log("[AddressDialog] Submitting address:", data, "Existing Address ID:", existingAddress?.id);
+    
+    let result;
+    if (existingAddress?.id) {
+      result = await updateUserAddressAction(existingAddress.id, data);
+    } else {
+      result = await saveShippingAddressAction(data); 
     }
+
+    if (result.success) {
+      toast({
+        title: existingAddress ? "Dirección Actualizada" : "Dirección Guardada",
+        description: result.message || \`Tu dirección ha sido \${existingAddress ? 'actualizada' : 'guardada'}.\`,
+      });
+      onAddressSavedOrUpdated();
+    } else {
+      toast({
+        title: existingAddress ? "Error al Actualizar" : "Error al Guardar",
+        description: result.message || "No se pudo procesar la dirección.",
+        variant: "destructive",
+      });
+    }
+    setIsSubmittingAddress(false);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) { // Si se está cerrando el diálogo
+        formMethods.reset(); // Limpiar el formulario
+        setEditingAddress(null); // Asegurar que no quede ninguna dirección en edición
+      }
+      onOpenChange(open);
+    }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Añadir Nueva Dirección</DialogTitle>
+          <DialogTitle>{existingAddress ? 'Editar Dirección' : 'Añadir Nueva Dirección'}</DialogTitle>
           <DialogDescription>
-            Ingresa los detalles de tu nueva dirección de envío.
+            {existingAddress ? 'Modifica los detalles de tu dirección.' : 'Ingresa los detalles de tu nueva dirección de envío.'}
           </DialogDescription>
         </DialogHeader>
-        <FormProvider {...formMethods}> {/* Usar formMethods aquí */}
+        <FormProvider {...formMethods}> 
           <form onSubmit={formMethods.handleSubmit(handleAddressSubmit)} className="space-y-4 py-4">
+            {/* Campos del ShippingForm reutilizados */}
             <FormField
               control={formMethods.control}
               name="nombreCompleto"
@@ -567,23 +667,9 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
                   </FormItem>
                 )}
               />
-              <FormField
+               <FormField
                 control={formMethods.control}
-                name="codigoPostal"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Código Postal</FormLabel>
-                    <FormControl>
-                      <Input placeholder="01234" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-             <FormField
-                control={formMethods.control}
-                name="estado"
+                name="estado" 
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Estado</FormLabel>
@@ -594,26 +680,43 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
                   </FormItem>
                 )}
               />
-            <FormField
-              control={formMethods.control}
-              name="pais"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>País</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un país" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="México">México</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            </div>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                    control={formMethods.control}
+                    name="codigoPostal"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>Código Postal</FormLabel>
+                        <FormControl>
+                            <Input placeholder="01234" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+                <FormField
+                    control={formMethods.control}
+                    name="pais"
+                    render={({ field }) => (
+                        <FormItem>
+                        <FormLabel>País</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecciona un país" />
+                            </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                            <SelectItem value="México">México</SelectItem>
+                            {/* Puedes añadir más países si es necesario */}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                />
+            </div>
             <FormField
               control={formMethods.control}
               name="telefono"
@@ -629,13 +732,13 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
             />
             <DialogFooter className="pt-6">
               <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => { formMethods.reset(); onOpenChange(false);}} disabled={isSubmittingAddress}>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmittingAddress}>
                   Cancelar
                 </Button>
               </DialogClose>
               <Button type="submit" disabled={isSubmittingAddress || !formMethods.formState.isValid} className="bg-primary hover:bg-primary/90">
                 {isSubmittingAddress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Guardar Dirección
+                {existingAddress ? 'Guardar Cambios' : 'Añadir Dirección'}
               </Button>
             </DialogFooter>
           </form>
