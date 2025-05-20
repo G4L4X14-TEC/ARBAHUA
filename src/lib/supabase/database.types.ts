@@ -1,4 +1,3 @@
-
 export type Json =
   | string
   | number
@@ -59,13 +58,13 @@ export type Database = {
           {
             foreignKeyName: "carritos_cliente_id_fkey"
             columns: ["cliente_id"]
-            isOneToOne: false // A client can have only one active cart conceptually, but FK allows multiple.
+            isOneToOne: false 
             referencedRelation: "usuarios"
             referencedColumns: ["id"]
           }
         ]
       }
-      categorias: { // Normalized from "categorías"
+      categorias: { 
         Row: {
           id: string
           nombre: string
@@ -126,8 +125,11 @@ export type Database = {
           calle: string
           ciudad: string
           estado: string
-          codigo_postal: string // Normalized from "código_postal"
-          pais: string // Normalized from "país"
+          codigo_postal: string 
+          pais: string 
+          // Opcional: si las añadiste a la BD
+          // nombre_completo_destinatario?: string | null
+          // telefono_contacto?: string | null
         }
         Insert: {
           id?: string
@@ -137,6 +139,9 @@ export type Database = {
           estado: string
           codigo_postal: string
           pais: string
+          // Opcional:
+          // nombre_completo_destinatario?: string | null
+          // telefono_contacto?: string | null
         }
         Update: {
           id?: string
@@ -146,6 +151,9 @@ export type Database = {
           estado?: string
           codigo_postal?: string
           pais?: string
+          // Opcional:
+          // nombre_completo_destinatario?: string | null
+          // telefono_contacto?: string | null
         }
         Relationships: [
           {
@@ -194,19 +202,26 @@ export type Database = {
       }
       items_carrito: {
         Row: {
+          id?: string; // Si tu tabla realmente tiene un id PK. Si no, quita esto.
+                      // Tu esquema original indicaba PK compuesta (carrito_id, producto_id)
           carrito_id: string
           producto_id: string
           cantidad: number
+          // precio_al_agregar?: number | null; // Si añadiste esta columna
         }
         Insert: {
+          id?: string;
           carrito_id: string
           producto_id: string
           cantidad: number
+          // precio_al_agregar?: number | null;
         }
         Update: {
+          id?: string;
           carrito_id?: string
           producto_id?: string
           cantidad?: number
+          // precio_al_agregar?: number | null;
         }
         Relationships: [
           {
@@ -262,9 +277,10 @@ export type Database = {
           id: string
           pedido_id: string
           monto: number
-          metodo_pago: string // Normalized from "método_pago"
+          metodo_pago: string 
           fecha_pago: string | null
           estado: Database["public"]["Enums"]["estado_pago_type"]
+          stripe_payment_intent_id?: string | null // Si la añadiste
         }
         Insert: {
           id?: string
@@ -273,6 +289,7 @@ export type Database = {
           metodo_pago: string
           fecha_pago?: string | null
           estado: Database["public"]["Enums"]["estado_pago_type"]
+          stripe_payment_intent_id?: string | null
         }
         Update: {
           id?: string
@@ -281,6 +298,7 @@ export type Database = {
           metodo_pago?: string
           fecha_pago?: string | null
           estado?: Database["public"]["Enums"]["estado_pago_type"]
+          stripe_payment_intent_id?: string | null
         }
         Relationships: [
           {
@@ -298,7 +316,7 @@ export type Database = {
           cliente_id: string
           direccion_id: string
           total: number
-          estado: Database["public"]["Enums"]["estado_pedido_type"]
+          estado: Database["public"]["Enums"]["estado_pedido_type"] | null // Permitir null si es posible
           fecha_pedido: string | null
         }
         Insert: {
@@ -306,7 +324,7 @@ export type Database = {
           cliente_id: string
           direccion_id: string
           total: number
-          estado: Database["public"]["Enums"]["estado_pedido_type"]
+          estado: Database["public"]["Enums"]["estado_pedido_type"] | null
           fecha_pedido?: string | null
         }
         Update: {
@@ -314,7 +332,7 @@ export type Database = {
           cliente_id?: string
           direccion_id?: string
           total?: number
-          estado?: Database["public"]["Enums"]["estado_pedido_type"]
+          estado?: Database["public"]["Enums"]["estado_pedido_type"] | null
           fecha_pedido?: string | null
         }
         Relationships: [
@@ -352,7 +370,7 @@ export type Database = {
             foreignKeyName: "producto_categoria_categoria_id_fkey"
             columns: ["categoria_id"]
             isOneToOne: false
-            referencedRelation: "categorias" // Normalized
+            referencedRelation: "categorias" 
             referencedColumns: ["id"]
           },
           {
@@ -411,14 +429,14 @@ export type Database = {
           }
         ]
       }
-      resenas: { // Normalized from "reseñas"
+      reseñas: { 
         Row: {
           id: string
           cliente_id: string
           producto_id: string
-          puntuacion: number // Normalized from "puntuación"
+          puntuacion: number 
           comentario: string | null
-          fecha_resena: string | null
+          fecha_resena: string | null // Normalizado de fecha_reseña
         }
         Insert: {
           id?: string
@@ -491,7 +509,7 @@ export type Database = {
           {
             foreignKeyName: "tiendas_artesano_id_fkey"
             columns: ["artesano_id"]
-            isOneToOne: false // Un artesano puede tener una tienda, una tienda pertenece a un artesano.
+            isOneToOne: false 
             referencedRelation: "usuarios"
             referencedColumns: ["id"]
           }
@@ -508,7 +526,7 @@ export type Database = {
           eliminado: boolean
         }
         Insert: {
-          id: string // Corresponds to auth.users.id
+          id: string 
           nombre: string
           email: string
           rol: Database["public"]["Enums"]["rol_type"]
@@ -544,7 +562,7 @@ export type Database = {
     }
     Enums: {
       estado_pago_type: "Aprobado" | "Rechazado"
-      estado_pedido_type: "Pendiente" | "Enviado" | "Entregado" | "Cancelado"
+      estado_pedido_type: "Pagado" | "Pendiente" | "Enviado" | "Entregado" | "Cancelado" // 'Pagado' añadido
       estado_producto_type: "activo" | "inactivo" | "borrador"
       estado_tienda_type: "activa" | "inactiva"
       rol_type: "cliente" | "artesano" | "admin"

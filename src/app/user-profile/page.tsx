@@ -14,6 +14,35 @@ import {
   CardTitle, 
   CardFooter 
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input"; // Para el diálogo de añadir dirección
+import { Label } from "@/components/ui/label"; // Para el diálogo de añadir dirección
+import { Textarea } from "@/components/ui/textarea"; // Para el diálogo de añadir dirección
+import { 
+  Form, 
+  FormControl, 
+  FormDescription, 
+  FormField, 
+  FormItem, 
+  FormLabel, 
+  FormMessage 
+} from "@/components/ui/form"; // Para el diálogo de añadir dirección
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog"; // Para el diálogo de añadir dirección
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"; // Para el diálogo de añadir dirección
+
 import { 
   UserCircle, 
   Package, 
@@ -33,12 +62,17 @@ import {
   PlusCircle 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Tables } from "@/lib/supabase/database.types";
+import type { Tables, TablesInsert } from "@/lib/supabase/database.types"; // Importar TablesInsert
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getUserOrdersAction, type UserOrderForDisplay } from "@/app/actions/userProfileActions";
+import { getUserOrdersAction, getUserAddressesAction, type UserOrderForDisplay } from "@/app/actions/userProfileActions";
+import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; // Para guardar la nueva dirección
+import { shippingFormSchema, type ShippingFormValues } from "@/app/checkout/page"; // Reutilizar de checkout
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+
 
 export default function UserProfilePage() {
   const router = useRouter();
@@ -55,13 +89,38 @@ export default function UserProfilePage() {
   const [isLoadingOrders, setIsLoadingOrders] = React.useState(true);
   const [errorOrders, setErrorOrders] = React.useState<string | null>(null);
 
+  const [addresses, setAddresses] = React.useState<Tables<'direcciones'>[]>([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = React.useState(true);
+  const [errorAddresses, setErrorAddresses] = React.useState<string | null>(null);
+  const [isAddAddressDialogOpen, setIsAddAddressDialogOpen] = React.useState(false);
+  const [isSubmittingAddress, setIsSubmittingAddress] = React.useState(false);
+
+
   React.useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL para que el mensaje no reaparezca en cada recarga.
+      // Opcional: limpiar el parámetro de la URL 
       // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
+
+  const fetchAddresses = React.useCallback(async () => {
+    if (!profile) return;
+    console.log('[UserProfilePage] Fetching addresses for user:', profile.id);
+    setIsLoadingAddresses(true);
+    setErrorAddresses(null);
+    try {
+      const userAddresses = await getUserAddressesAction();
+      console.log('[UserProfilePage] Addresses received:', userAddresses);
+      setAddresses(userAddresses);
+    } catch (err: any) {
+      console.error('[UserProfilePage] Error fetching addresses:', err);
+      setErrorAddresses("No se pudieron cargar tus direcciones.");
+      toast({ title: "Error al Cargar Direcciones", description: err.message || "Ocurrió un problema.", variant: "destructive" });
+    } finally {
+      setIsLoadingAddresses(false);
+    }
+  }, [profile, toast]);
 
   React.useEffect(() => {
     const fetchUserData = async () => {
@@ -96,7 +155,7 @@ export default function UserProfilePage() {
   }, [supabase, router, toast]);
 
   React.useEffect(() => {
-    if (user && !isLoading) { 
+    if (user && profile && !isLoading) { 
       const fetchOrders = async () => {
         console.log('[UserProfilePage] Fetching orders for user:', user.id);
         setIsLoadingOrders(true);
@@ -108,28 +167,28 @@ export default function UserProfilePage() {
         } catch (err: any) {
           console.error('[UserProfilePage] Error fetching orders:', err);
           setErrorOrders("No se pudieron cargar tus pedidos.");
-          toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema inesperado.", variant: "destructive" });
+          toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema.", variant: "destructive" });
         } finally {
           setIsLoadingOrders(false);
         }
       };
       fetchOrders();
+      fetchAddresses(); // Cargar direcciones también
     }
-  }, [user, isLoading, toast]); // Dependencia de isLoading también, para asegurar que user y profile estén listos
+  }, [user, profile, isLoading, toast, fetchAddresses]); // fetchAddresses añadido como dependencia
 
   const handleSignOut = async () => {
-    setIsLoading(true); // O un estado de loading específico para el logout
+    setIsLoading(true); 
     await supabase.auth.signOut();
     router.push('/');
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
-    router.refresh(); // Importante para que la Navbar y otros componentes se actualicen
-    // No es necesario setIsLoading(false) aquí porque la página redirigirá o recargará.
+    router.refresh(); 
   };
 
   const getOrderStatusBadgeVariant = (status?: Tables<'pedidos'>['estado'] | null): "default" | "secondary" | "destructive" | "outline" => {
     if (!status) return 'outline';
     switch (status) {
-      case 'Pagado':
+      case 'Pagado': // Añadido para manejar el nuevo estado
       case 'Enviado':
       case 'Entregado':
         return 'default'; 
@@ -142,6 +201,12 @@ export default function UserProfilePage() {
     }
   };
 
+  const handleAddressAdded = () => {
+    fetchAddresses(); // Recargar la lista de direcciones
+    setIsAddAddressDialogOpen(false); // Cerrar el diálogo
+  };
+
+
   if (isLoading) {
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
@@ -152,8 +217,6 @@ export default function UserProfilePage() {
   }
 
   if (!user || !profile) {
-    // Esta condición ya debería estar cubierta por la redirección en useEffect,
-    // pero es un fallback por si el perfil no se carga pero el usuario sí.
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
@@ -205,7 +268,6 @@ export default function UserProfilePage() {
                     <p><span className="font-medium">Email:</span> {user.email}</p>
                     <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                   </div>
-                  {/* Placeholder para editar perfil */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="outline" className="w-full mt-3" disabled>
@@ -327,24 +389,52 @@ export default function UserProfilePage() {
               </CardContent>
             </Card>
 
+             {/* Sección Mis Direcciones */}
             <Card className="shadow-xl">
-              <CardHeader>
-                <CardTitle className="text-xl text-earthy-green flex items-center gap-2"><MapPin className="h-5 w-5" />Mis Direcciones</CardTitle>
+              <CardHeader className="flex flex-row justify-between items-center">
+                <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
+                  <MapPin className="h-5 w-5" />
+                  Mis Direcciones
+                </CardTitle>
+                <Button size="sm" onClick={() => setIsAddAddressDialogOpen(true)}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Dirección
+                </Button>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">Próximamente: Aquí podrás gestionar tus direcciones de envío guardadas.</p>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled>
-                      <PlusCircle className="mr-2 h-4 w-4" /> Añadir Nueva Dirección
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Próximamente: Añade y gestiona tus direcciones.</p>
-                  </TooltipContent>
-                </Tooltip>
+              <CardContent>
+                {isLoadingAddresses ? (
+                  <div className="flex justify-center items-center py-6">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Cargando direcciones...</p>
+                  </div>
+                ) : errorAddresses ? (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Error al Cargar Direcciones</AlertTitle>
+                    <AlertDescription>{errorAddresses}</AlertDescription>
+                  </Alert>
+                ) : addresses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">No tienes direcciones guardadas.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {addresses.map((address) => (
+                      <Card key={address.id} className="p-4 text-sm">
+                        <p className="font-semibold">{address.calle}</p>
+                        <p>{address.ciudad}, {address.estado}, {address.codigo_postal}</p>
+                        <p>{address.pais}</p>
+                        {/* Podríamos añadir botones de Editar/Eliminar aquí en el futuro */}
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            <AddAddressDialog
+              isOpen={isAddAddressDialogOpen}
+              onOpenChange={setIsAddAddressDialogOpen}
+              onAddressAdded={handleAddressAdded}
+            />
+
 
             <Card className="shadow-xl">
               <CardHeader>
@@ -352,7 +442,6 @@ export default function UserProfilePage() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">Próximamente: Configura tus notificaciones por correo, suscripciones y otras preferencias.</p>
-                {/* Placeholder para opciones de preferencias */}
               </CardContent>
             </Card>
             
@@ -362,3 +451,181 @@ export default function UserProfilePage() {
     </TooltipProvider>
   );
 }
+
+
+interface AddAddressDialogProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onAddressAdded: () => void;
+}
+
+function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDialogProps) {
+  const { toast } = useToast();
+  const [isSubmittingAddress, setIsSubmittingAddress] = React.useState(false);
+
+  const form = useForm<ShippingFormValues>({
+    resolver: zodResolver(shippingFormSchema),
+    defaultValues: {
+      nombreCompleto: "",
+      direccion: "",
+      ciudad: "",
+      estado: "",
+      codigoPostal: "",
+      pais: "México", 
+      telefono: "",
+    },
+  });
+
+  const handleAddressSubmit = async (data: ShippingFormValues) => {
+    setIsSubmittingAddress(true);
+    console.log("[AddAddressDialog] Submitting new address:", data);
+    const result = await saveShippingAddressAction(data);
+
+    if (result.success) {
+      toast({
+        title: "Dirección Guardada",
+        description: result.message || "Tu nueva dirección ha sido guardada.",
+      });
+      form.reset();
+      onAddressAdded(); // Llama al callback para recargar y cerrar
+    } else {
+      toast({
+        title: "Error al Guardar Dirección",
+        description: result.message || "No se pudo guardar la dirección.",
+        variant: "destructive",
+      });
+    }
+    setIsSubmittingAddress(false);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Añadir Nueva Dirección</DialogTitle>
+          <DialogDescription>
+            Ingresa los detalles de tu nueva dirección de envío.
+          </DialogDescription>
+        </DialogHeader>
+        <FormProvider {...form}> {/* Envuelve con FormProvider aquí si ShippingForm usa useFormContext */}
+          <form onSubmit={form.handleSubmit(handleAddressSubmit)} className="space-y-4 py-4">
+            <FormField
+              control={form.control}
+              name="nombreCompleto"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre Completo del Destinatario</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Juan Pérez" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="direccion"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Dirección (Calle y Número)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Av. Siempre Viva 742" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="ciudad"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Ciudad</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ciudad de México" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="codigoPostal"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Código Postal</FormLabel>
+                    <FormControl>
+                      <Input placeholder="01234" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <FormField
+              control={form.control}
+              name="estado"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Estado/Provincia</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ej: Jalisco" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="pais"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>País</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un país" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="México">México</SelectItem>
+                      {/* Puedes añadir más países aquí */}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="telefono"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Teléfono de Contacto (10 dígitos)</FormLabel>
+                  <FormControl>
+                    <Input type="tel" placeholder="5512345678" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter className="pt-6">
+              <DialogClose asChild>
+                <Button type="button" variant="outline" disabled={isSubmittingAddress}>
+                  Cancelar
+                </Button>
+              </DialogClose>
+              <Button type="submit" disabled={isSubmittingAddress || !form.formState.isValid} className="bg-primary hover:bg-primary/90">
+                {isSubmittingAddress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Guardar Dirección
+              </Button>
+            </DialogFooter>
+          </form>
+        </FormProvider>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+este es el codigo que se esta ejecutando, esta bien no tiene errores?
