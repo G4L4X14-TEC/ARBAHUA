@@ -94,7 +94,7 @@ export default function CartPage() {
   };
 
   const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
-    if (newQuantity < 0) { // Allow 0 for removal by the action itself
+    if (newQuantity < 0) { 
       toast({ title: "Cantidad inválida", description: "La cantidad no puede ser negativa.", variant: "destructive" });
       return;
     }
@@ -201,7 +201,7 @@ export default function CartPage() {
                       size="icon" 
                       className="h-7 w-7" 
                       onClick={() => handleUpdateQuantity(item.productos.id, item.cantidad - 1)} 
-                      disabled={isUpdatingQuantity[item.productos.id] || isRemovingItem[item.productos.id] }
+                      disabled={isUpdatingQuantity[item.productos.id] || isRemovingItem[item.productos.id] || item.cantidad === 0 } // No permitir decrementar si es 0 (se elimina)
                     >
                       {isUpdatingQuantity[item.productos.id] && item.cantidad -1 < item.cantidad ? <Loader2 className="h-3 w-3 animate-spin"/> : <Minus className="h-3 w-3" />}
                     </Button>
@@ -268,3 +268,4 @@ export default function CartPage() {
     </main>
   );
 }
+    
