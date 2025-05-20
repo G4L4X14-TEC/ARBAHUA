@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -12,7 +13,6 @@ export type UserOrderForDisplay = Pick<Tables<'pedidos'>, 'id' | 'total' | 'esta
 };
 
 // Helper para crear el cliente de Supabase en Server Actions
-// Esta función es similar a la de otros archivos de acciones, podrías centralizarla.
 async function createSupabaseServerClientAction() {
   const cookieStore = await cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -78,7 +78,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
 
     if (ordersError) {
       console.error('[getUserOrdersAction] Error fetching orders:', ordersError.message);
-      throw ordersError;
+      throw ordersError; // Opcional: relanzar para que el llamador maneje o simplemente retornar []
     }
 
     if (!ordersData) {
@@ -158,4 +158,7 @@ export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]>
     return addressesData;
 
   } catch (e: any) {
-    console.error("[
+    console.error("[getUserAddressesAction] Critical error in action:", e.message); // Corregido aquí
+    return [];
+  }
+}
