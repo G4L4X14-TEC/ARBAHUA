@@ -1,34 +1,59 @@
 
-"use client"; // Necesario para hooks como useRouter y createSupabaseBrowserClient
+"use client"; 
 
 import * as React from "react";
-import { useRouter, useSearchParams } from "next/navigation"; // Importar useSearchParams
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { UserCircle, Package, ShoppingBag, Heart, LogOut, Edit3, Home as HomeIcon, Store, CheckCircle2 } from "lucide-react"; // CheckCircle2 añadido
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle, 
+  CardFooter 
+} from "@/components/ui/card";
+import { 
+  UserCircle, 
+  Package, 
+  ShoppingBag, 
+  Heart, 
+  LogOut, 
+  Home as HomeIcon, 
+  Store,
+  CheckCircle2,
+  ClipboardList,
+  Loader2,
+  AlertTriangle
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/lib/supabase/database.types";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Importar Alert
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { getUserOrdersAction, type UserOrderForDisplay } from "@/app/actions/userProfileActions";
 
 export default function UserProfilePage() {
   const router = useRouter();
-  const searchParams = useSearchParams(); // Hook para leer query params
+  const searchParams = useSearchParams();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
+  
   const [user, setUser] = React.useState<User | null>(null);
   const [profile, setProfile] = React.useState<Tables<'usuarios'> | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [showOrderSuccessMessage, setShowOrderSuccessMessage] = React.useState(false);
 
+  const [orders, setOrders] = React.useState<UserOrderForDisplay[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = React.useState(true);
+  const [errorOrders, setErrorOrders] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL para que el mensaje no se muestre en recargas
-      // router.replace('/user-profile', { scroll: false }); // Descomentar si se desea este comportamiento
+      // Opcional: limpiar el parámetro de la URL 
+      // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
 
@@ -44,7 +69,6 @@ export default function UserProfilePage() {
       }
       setUser(authUser);
 
-      console.log("[UserProfilePage] Fetching profile for user ID:", authUser.id);
       const { data: profileData, error: profileError } = await supabase
         .from("usuarios")
         .select("*")
@@ -52,21 +76,40 @@ export default function UserProfilePage() {
         .single();
 
       if (profileError) {
-        console.error("[UserProfilePage] Error fetching profile:", profileError);
         toast({ title: "Error de Perfil", description: `No se pudo cargar tu perfil: ${profileError.message}`, variant: "destructive" });
         setProfile(null); 
       } else if (!profileData) {
-        console.warn("[UserProfilePage] Profile data not found for user ID:", authUser.id);
         toast({ title: "Perfil No Encontrado", description: "No se encontraron datos de perfil para tu cuenta.", variant: "destructive" });
         setProfile(null);
       } else {
-        console.log("[UserProfilePage] Profile data fetched:", profileData);
         setProfile(profileData);
       }
       setIsLoading(false);
     };
     fetchUserData();
   }, [supabase, router, toast]);
+
+  React.useEffect(() => {
+    if (user) { // Solo cargar pedidos si el usuario está disponible
+      const fetchOrders = async () => {
+        console.log('[UserProfilePage] Fetching orders for user:', user.id);
+        setIsLoadingOrders(true);
+        setErrorOrders(null);
+        try {
+          const userOrders = await getUserOrdersAction();
+          console.log('[UserProfilePage] Orders received:', userOrders);
+          setOrders(userOrders);
+        } catch (err: any) {
+          console.error('[UserProfilePage] Error fetching orders:', err);
+          setErrorOrders("No se pudieron cargar tus pedidos.");
+          toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema inesperado.", variant: "destructive" });
+        } finally {
+          setIsLoadingOrders(false);
+        }
+      };
+      fetchOrders();
+    }
+  }, [user, toast]); // Dependencia de 'user'
 
   const handleSignOut = async () => {
     setIsLoading(true);
@@ -76,6 +119,22 @@ export default function UserProfilePage() {
     router.refresh();
     setIsLoading(false);
   };
+
+  const getOrderStatusBadgeVariant = (status: Tables<'pedidos'>['estado']): "default" | "secondary" | "destructive" | "outline" => {
+    switch (status) {
+      case 'Pagado':
+      case 'Enviado':
+      case 'Entregado':
+        return 'default'; // Verde o color primario por defecto de Badge
+      case 'Pendiente':
+        return 'secondary'; // Gris o color secundario
+      case 'Cancelado':
+        return 'destructive'; // Rojo
+      default:
+        return 'outline';
+    }
+  };
+
 
   if (isLoading) {
     return (
@@ -87,6 +146,7 @@ export default function UserProfilePage() {
   }
 
   if (!user) {
+    // Esto no debería pasar si la redirección en el primer useEffect funciona, pero es un fallback.
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
@@ -114,73 +174,139 @@ export default function UserProfilePage() {
         </Alert>
       )}
 
-      <Card className="w-full max-w-2xl mx-auto shadow-xl">
-        <CardHeader className="text-center border-b pb-6">
-          <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 mb-4">
-            <UserCircle className="h-12 w-12 text-primary" />
-          </div>
-          <CardTitle className="text-3xl font-bold text-primary">
-            {profile?.nombre || user.email}
-          </CardTitle>
-          {profile?.rol && (
-            <CardDescription className="text-muted-foreground pt-1 capitalize">
-              {profile.rol}
-            </CardDescription>
-          )}
-        </CardHeader>
-        <CardContent className="p-6 space-y-6">
-          <div className="space-y-2">
-            <h3 className="text-lg font-semibold text-earthy-green">Información de la Cuenta</h3>
-            <div className="text-sm text-foreground space-y-1">
-              <p><span className="font-medium">Nombre:</span> {profile?.nombre || 'No especificado'}</p>
-              <p><span className="font-medium">Email:</span> {user.email}</p>
-              {profile?.rol && <p><span className="font-medium">Rol:</span> <span className="capitalize">{profile.rol}</span></p>}
-              <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-             <h3 className="text-lg font-semibold text-earthy-green mb-2">Mis Pedidos</h3>
-             {/* Aquí irá el listado de pedidos */}
-             <p className="text-sm text-muted-foreground">Próximamente: Aquí podrás ver tu historial de pedidos.</p>
-          </div>
-
-          <div className="space-y-4">
-             <h3 className="text-lg font-semibold text-earthy-green mb-2">Acciones Rápidas</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
-                <Heart className="mr-3 h-5 w-5 text-primary" />
-                 <div>
-                  <p className="font-medium">Mis Favoritos</p>
-                  <p className="text-xs text-muted-foreground">Productos guardados (Próximamente).</p>
-                </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        {/* Columna de Perfil y Acciones */}
+        <section className="md:col-span-1 space-y-6">
+          <Card className="shadow-xl">
+            <CardHeader className="text-center border-b pb-6">
+              <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 mb-4">
+                <UserCircle className="h-12 w-12 text-primary" />
+              </div>
+              <CardTitle className="text-3xl font-bold text-primary">
+                {profile?.nombre || user.email}
+              </CardTitle>
+              {profile?.rol && (
+                <CardDescription className="text-muted-foreground pt-1 capitalize">
+                  {profile.rol}
+                </CardDescription>
+              )}
+            </CardHeader>
+            <CardContent className="p-6 space-y-2">
+              <h3 className="text-lg font-semibold text-earthy-green">Información de la Cuenta</h3>
+              <div className="text-sm text-foreground space-y-1">
+                <p><span className="font-medium">Nombre:</span> {profile?.nombre || 'No especificado'}</p>
+                <p><span className="font-medium">Email:</span> {user.email}</p>
+                {profile?.rol && <p><span className="font-medium">Rol:</span> <span className="capitalize">{profile.rol}</span></p>}
+                <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+            </CardContent>
+             <CardFooter className="border-t p-6 flex justify-end">
+               <Button onClick={handleSignOut} variant="destructive" disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
+                 Cerrar Sesión
               </Button>
-               <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
-                <HomeIcon className="mr-3 h-5 w-5 text-primary" />
-                 <div>
-                  <p className="font-medium">Mis Direcciones</p>
-                  <p className="text-xs text-muted-foreground">Gestionar direcciones (Próximamente).</p>
-                </div>
-              </Button>
-              {profile?.rol === "artesano" && (
-                 <Button onClick={() => router.push('/artisan-dashboard')} variant="outline" className="w-full justify-start text-left h-auto py-3 bg-primary/5 border-primary/30 hover:bg-primary/10">
-                    <Store className="mr-3 h-5 w-5 text-primary" />
+            </CardFooter>
+          </Card>
+
+          <Card className="shadow-xl">
+             <CardHeader>
+                <CardTitle className="text-xl text-earthy-green">Acciones Rápidas</CardTitle>
+             </CardHeader>
+             <CardContent className="space-y-3">
+                <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
+                    <Heart className="mr-3 h-5 w-5 text-primary" />
                     <div>
-                        <p className="font-medium">Panel de Artesano</p>
-                        <p className="text-xs text-muted-foreground">Gestionar mi tienda y productos.</p>
+                    <p className="font-medium">Mis Favoritos</p>
+                    <p className="text-xs text-muted-foreground">Productos guardados (Próximamente).</p>
                     </div>
                 </Button>
+                <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
+                    <HomeIcon className="mr-3 h-5 w-5 text-primary" />
+                    <div>
+                    <p className="font-medium">Mis Direcciones</p>
+                    <p className="text-xs text-muted-foreground">Gestionar direcciones (Próximamente).</p>
+                    </div>
+                </Button>
+                {profile?.rol === "artesano" && (
+                    <Button onClick={() => router.push('/artisan-dashboard')} variant="outline" className="w-full justify-start text-left h-auto py-3 bg-primary/5 border-primary/30 hover:bg-primary/10">
+                        <Store className="mr-3 h-5 w-5 text-primary" />
+                        <div>
+                            <p className="font-medium">Panel de Artesano</p>
+                            <p className="text-xs text-muted-foreground">Gestionar mi tienda y productos.</p>
+                        </div>
+                    </Button>
+                )}
+             </CardContent>
+          </Card>
+        </section>
+
+        {/* Columna de Historial de Pedidos */}
+        <section className="md:col-span-2">
+          <Card className="shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-2xl text-earthy-green flex items-center gap-2">
+                <ClipboardList className="h-6 w-6" />
+                Mis Pedidos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingOrders ? (
+                <div className="flex justify-center items-center py-10">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="ml-3 text-muted-foreground">Cargando pedidos...</p>
+                </div>
+              ) : errorOrders ? (
+                 <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{errorOrders}</AlertDescription>
+                  </Alert>
+              ) : orders.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground">
+                  <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                  <p>Aún no tienes pedidos.</p>
+                  <Button asChild variant="link" className="mt-2 text-primary">
+                    <Link href="/search">¡Empieza a comprar!</Link>
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {orders.map((order) => (
+                    <Card key={order.id} className="overflow-hidden">
+                      <CardHeader className="flex flex-row justify-between items-center p-4 bg-muted/30">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            Pedido <span className="text-primary">#{order.id.substring(0, 8)}...</span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {order.formatted_date}
+                          </p>
+                        </div>
+                        <Badge variant={getOrderStatusBadgeVariant(order.estado)} className="capitalize">
+                          {order.estado.replace('_', ' ')}
+                        </Badge>
+                      </CardHeader>
+                      <CardContent className="p-4 space-y-2">
+                        <p className="text-sm">
+                          <span className="font-medium">Total:</span> MXN${order.total.toFixed(2)}
+                        </p>
+                        <p className="text-sm text-muted-foreground italic">
+                          <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
+                        </p>
+                      </CardContent>
+                      <CardFooter className="p-4 border-t">
+                        <Button variant="outline" size="sm" disabled> {/* Placeholder */}
+                          Ver Detalles
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  ))}
+                </div>
               )}
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter className="border-t p-6 flex justify-end">
-           <Button onClick={handleSignOut} variant="destructive" disabled={isLoading}>
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
-             Cerrar Sesión
-          </Button>
-        </CardFooter>
-      </Card>
+            </CardContent>
+          </Card>
+        </section>
+      </div>
     </main>
   );
 }
