@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -61,7 +60,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
   try {
     const { data: ordersData, error: ordersError } = await supabase
       .from('pedidos')
-      .select(`
+      .select(\`
         id,
         total,
         estado,
@@ -73,7 +72,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
             nombre
           )
         )
-      `)
+      \`)
       .eq('cliente_id', user.id)
       .order('fecha_pedido', { ascending: false });
 
@@ -87,17 +86,16 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
       return [];
     }
 
-    console.log(`[getUserOrdersAction] Fetched ${ordersData.length} orders.`);
+    console.log(\`[getUserOrdersAction] Fetched \${ordersData.length} orders.\`);
 
     const displayedOrders: UserOrderForDisplay[] = ordersData.map(order => {
       let itemsSummary = 'Múltiples productos';
-      // Aseguramos que detalle_pedido es un array antes de accederlo
       const detalleArray = Array.isArray(order.detalle_pedido) ? order.detalle_pedido : [];
 
       if (detalleArray.length > 0) {
-        const firstDetailItem = detalleArray[0] as unknown as { productos: { nombre: string } | null, cantidad: number }; // Type assertion
+        const firstDetailItem = detalleArray[0] as unknown as { productos: { nombre: string } | null, cantidad: number }; 
         if (firstDetailItem && firstDetailItem.productos) {
-          itemsSummary = `${firstDetailItem.productos.nombre}${detalleArray.length > 1 ? ' y más...' : ''}`;
+          itemsSummary = \`\${firstDetailItem.productos.nombre}\${detalleArray.length > 1 ? ' y más...' : ''}\`;
         } else {
           itemsSummary = 'Detalles del producto no disponibles';
         }
@@ -156,6 +154,8 @@ export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]>
       return [];
     }
 
-    console.log(`[getUserAddressesAction] Fetched ${addressesData.length} addresses.`);
+    console.log(\`[getUserAddressesAction] Fetched \${addressesData.length} addresses.\`);
     return addressesData;
 
+  } catch (e: any) {
+    console.error("[
