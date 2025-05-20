@@ -8,6 +8,7 @@ import type { Tables, Database, Json, TablesInsert, TablesUpdate } from '@/lib/s
 // Tipo para los items del carrito tal como se mostrarán, incluyendo detalles del producto
 export type CartItemForDisplay = Tables<'items_carrito'> & {
   productos: Pick<Tables<'productos'>, 'id' | 'nombre' | 'precio'> & {
+    // Aseguramos que el tipo para imagenes_productos incluya es_principal
     imagenes_productos: Array<Pick<Tables<'imagenes_productos'>, 'url' | 'es_principal'>> | null; 
   };
   subtotal: number;
@@ -15,10 +16,14 @@ export type CartItemForDisplay = Tables<'items_carrito'> & {
 };
 
 // Helper para crear el cliente de Supabase en Server Actions
- function createSupabaseServerClientAction() {
-  const cookieStore =  cookies(); // Llamar a cookies() una vez
+function createSupabaseServerClientAction() {
+  const cookieStore = cookies(); // Llamar a cookies() una vez y de forma síncrona
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // console.log('[SupabaseServerClientAction - Cart] Initializing Supabase client.');
+  // console.log(`  NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
+  // console.log(`  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[SupabaseServerClientAction - Cart] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
@@ -36,17 +41,16 @@ export type CartItemForDisplay = Tables<'items_carrito'> & {
         set(name: string, value: string, options: CookieOptions) {
           // El try...catch puede ser omitido aquí si la documentación de @supabase/ssr no lo requiere
           // o si Next.js maneja esto de forma diferente en Server Actions.
-          // Por ahora, lo mantendremos para seguridad, pero si sigue dando problemas de contexto,
-          // podría ser un punto a revisar.
+          // Lo mantendremos por ahora, pero si causa problemas se puede quitar.
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // Silently ignore (e.g. if called from a static generation context, though less likely in SA)
+            // Silently ignore (e.g. if called from a static generation context)
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.delete({ name, ...options });
+            cookieStore.delete({ name, ...options }); // Usar delete en lugar de set con valor vacío
           } catch (error) {
             // Silently ignore
           }
@@ -58,7 +62,7 @@ export type CartItemForDisplay = Tables<'items_carrito'> & {
 
 export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
   console.log('[getCartItemsAction] Attempting to fetch cart items.');
-  const supabase = createSupabaseServerClientAction();
+  const supabase = createSupabaseServerClientAction(); // Llamada síncrona
   if (!supabase) {
     console.error("[getCartItemsAction] Supabase client not initialized.");
     return [];
@@ -163,7 +167,7 @@ export async function addProductToCartAction(
   quantityToAdd: number = 1
 ): Promise<{ success: boolean; message: string }> {
   console.log('[addProductToCartAction] Called with productId:', productId, "quantityToAdd:", quantityToAdd);
-  const supabase = createSupabaseServerClientAction();
+  const supabase = createSupabaseServerClientAction(); // Llamada síncrona
   if (!supabase) {
     return { success: false, message: "Error de conexión con el servidor." };
   }
