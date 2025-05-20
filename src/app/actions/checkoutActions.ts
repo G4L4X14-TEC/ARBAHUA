@@ -67,16 +67,13 @@ export async function saveShippingAddressAction(
   }
   console.log('[saveShippingAddressAction] User ID:', user.id);
 
-  // Normalizar los datos de la dirección para que coincidan con las columnas de la BD
-  // Asumiendo que tu tabla 'direcciones' tiene estas columnas:
   const normalizedAddressData = {
-    calle: addressData.direccion.trim(), // 'direccion' del formulario a 'calle' en BD
+    calle: addressData.direccion.trim(),
     ciudad: addressData.ciudad.trim(),
-    estado: addressData.estado.trim(),
-    codigo_postal: addressData.codigoPostal.trim(), // 'codigoPostal' a 'codigo_postal'
+    estado: addressData.estado.trim(), // Asegúrate que este campo exista en tu tabla `direcciones`
+    codigo_postal: addressData.codigoPostal.trim(),
     pais: addressData.pais.trim(),
-    // Los campos nombreCompleto y telefono no están en el esquema original de 'direcciones'.
-    // Si los añadiste, descomenta y ajusta los nombres de columna aquí.
+    // Si añadiste nombre_completo_destinatario y telefono_contacto a tu tabla 'direcciones', inclúyelos aquí:
     // nombre_completo_destinatario: addressData.nombreCompleto.trim(),
     // telefono_contacto: addressData.telefono.trim(),
   };
@@ -89,13 +86,13 @@ export async function saveShippingAddressAction(
       .eq('cliente_id', user.id)
       .eq('calle', normalizedAddressData.calle)
       .eq('ciudad', normalizedAddressData.ciudad)
-      .eq('estado', normalizedAddressData.estado)
+      .eq('estado', normalizedAddressData.estado) // Asegúrate que este campo exista en tu tabla
       .eq('codigo_postal', normalizedAddressData.codigo_postal)
       .eq('pais', normalizedAddressData.pais)
       .maybeSingle();
 
     if (selectError) {
-      console.error('[saveShippingAddressAction] Error checking for existing address:', selectError);
+      console.error('[saveShippingAddressAction] Error checking for existing address:', selectError.message);
       return { success: false, message: `Error al verificar la dirección: ${selectError.message}` };
     }
 
@@ -117,7 +114,7 @@ export async function saveShippingAddressAction(
       .single();
 
     if (insertError) {
-      console.error('[saveShippingAddressAction] Error inserting address:', insertError);
+      console.error('[saveShippingAddressAction] Error inserting address:', insertError.message);
       return { success: false, message: `Error al guardar la dirección: ${insertError.message}` };
     }
 
@@ -135,17 +132,15 @@ export async function saveShippingAddressAction(
   }
 }
 
-
-// Nueva Server Action para crear Payment Intent
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-04-10', // Usa la última versión de la API disponible
+  apiVersion: '2024-04-10',
 });
 
 export async function createPaymentIntentAction(): Promise<{
   success: boolean;
   clientSecret?: string;
   error?: string;
-  amount?: number; // Opcional: devolver el monto para confirmación en frontend
+  amount?: number; 
 }> {
   console.log('[createPaymentIntentAction] Attempting to create Payment Intent.');
   const supabase = createSupabaseServerClientAction();
@@ -159,21 +154,20 @@ export async function createPaymentIntentAction(): Promise<{
     return { success: false, error: "Usuario no autenticado." };
   }
 
-  const cartItems = await getCartItemsAction(); // Reutilizamos la acción para obtener los items y calcular el total
-  if (!cartItems || cartItems.length === 0) { // Verificación adicional por si getCartItemsAction devuelve null o []
+  const cartItems = await getCartItemsAction();
+  if (!cartItems || cartItems.length === 0) {
     console.log('[createPaymentIntentAction] Cart is empty or could not be fetched.');
     return { success: false, error: "Tu carrito está vacío o no se pudo cargar." };
   }
 
   const totalAmount = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-  const amountInCents = Math.round(totalAmount * 100); // Stripe requiere el monto en centavos
+  const amountInCents = Math.round(totalAmount * 100);
 
-  if (amountInCents <= 0) { // Stripe no permite montos de 0 o negativos para Payment Intents estándar.
+  if (amountInCents <= 0) {
      console.log(`[createPaymentIntentAction] Invalid total amount: ${totalAmount}`);
      return { success: false, error: "El monto total del carrito debe ser mayor a cero." };
   }
   console.log(`[createPaymentIntentAction] Calculated total amount in cents: ${amountInCents}`);
-
 
   if (!process.env.STRIPE_SECRET_KEY) {
     console.error('[createPaymentIntentAction] CRITICAL: STRIPE_SECRET_KEY no está configurada.');
@@ -187,13 +181,108 @@ export async function createPaymentIntentAction(): Promise<{
       automatic_payment_methods: {
         enabled: true,
       },
-      // Podrías añadir metadata como el user.id o el cart_id si es útil
-      metadata: { userId: user.id, /* cartId: cartItems[0]?.carrito_id */ }, // carrito_id puede no estar en CartItemForDisplay
+      metadata: { userId: user.id },
     });
     console.log('[createPaymentIntentAction] Payment Intent created successfully:', paymentIntent.id);
     return { success: true, clientSecret: paymentIntent.client_secret!, amount: amountInCents };
   } catch (error: any) {
     console.error('[createPaymentIntentAction] Error creating Payment Intent:', error.message);
     return { success: false, error: error.message || 'No se pudo iniciar el proceso de pago.' };
+  }
+}
+
+export async function createOrderAction(
+  cartItems: CartItemForDisplay[],
+  shippingAddressId: string,
+  paymentIntentId: string,
+  totalAmountInCents: number
+): Promise<{ success: boolean; orderId?: string; message: string }> {
+  console.log('[createOrderAction] Attempting to create order. PaymentIntentID:', paymentIntentId);
+  const supabase = createSupabaseServerClientAction();
+  if (!supabase) {
+    return { success: false, message: "Error de conexión con el servidor de base de datos." };
+  }
+
+  const { data: { user }, error: userAuthError } = await supabase.auth.getUser();
+  if (userAuthError || !user) {
+    console.error('[createOrderAction] User not authenticated.');
+    return { success: false, message: "Usuario no autenticado." };
+  }
+
+  const totalAmountForOrder = totalAmountInCents / 100; // Convert back to main currency unit
+
+  try {
+    // 1. Crear el pedido en la tabla 'pedidos'
+    console.log('[createOrderAction] Inserting into pedidos table...');
+    const { data: newOrder, error: orderError } = await supabase
+      .from('pedidos')
+      .insert({
+        cliente_id: user.id,
+        direccion_id: shippingAddressId,
+        total: totalAmountForOrder,
+        estado: 'Pagado', // O el estado inicial que prefieras (ej. 'Procesando')
+      })
+      .select('id')
+      .single();
+
+    if (orderError) {
+      console.error('[createOrderAction] Error inserting into pedidos:', orderError.message);
+      return { success: false, message: `Error al crear el pedido: ${orderError.message}` };
+    }
+    if (!newOrder || !newOrder.id) {
+      console.error('[createOrderAction] Failed to get new order ID.');
+      return { success: false, message: 'No se pudo obtener el ID del nuevo pedido.' };
+    }
+    const pedidoId = newOrder.id;
+    console.log('[createOrderAction] Order created successfully with ID:', pedidoId);
+
+    // 2. Crear los detalles del pedido en la tabla 'detalle_pedido'
+    console.log(`[createOrderAction] Inserting ${cartItems.length} items into detalle_pedido for order ID: ${pedidoId}`);
+    const detallePedidoItems = cartItems.map(item => ({
+      pedido_id: pedidoId,
+      producto_id: item.productos.id,
+      cantidad: item.cantidad,
+      precio: item.productos.precio, // Precio al momento de la compra
+    }));
+
+    const { error: detalleError } = await supabase
+      .from('detalle_pedido')
+      .insert(detallePedidoItems);
+
+    if (detalleError) {
+      console.error('[createOrderAction] Error inserting into detalle_pedido:', detalleError.message);
+      // Considerar un rollback o manejo de compensación aquí si la creación de detalles falla.
+      // Por ahora, solo devolvemos error y logueamos.
+      return { success: false, message: `Error al guardar los detalles del pedido: ${detalleError.message}` };
+    }
+    console.log('[createOrderAction] Detalle_pedido items inserted successfully.');
+
+    // 3. (Opcional pero recomendado) Crear un registro en la tabla 'pagos'
+    if (process.env.STRIPE_SECRET_KEY) { // Solo si Stripe está configurado
+      console.log('[createOrderAction] Inserting into pagos table...');
+      const { error: pagoError } = await supabase
+        .from('pagos')
+        .insert({
+          pedido_id: pedidoId,
+          monto: totalAmountForOrder,
+          metodo_pago: 'stripe',
+          estado: 'Aprobado', // El pago de Stripe ya fue aprobado
+          stripe_payment_intent_id: paymentIntentId, // Asumiendo que tienes esta columna
+        });
+
+      if (pagoError) {
+        console.error('[createOrderAction] Error inserting into pagos:', pagoError.message);
+        // Este error podría no ser crítico para el usuario si el pedido ya se creó, pero es bueno loguearlo.
+        // No necesariamente devolvemos un error al usuario por esto, pero se debe registrar.
+      } else {
+        console.log('[createOrderAction] Pago record inserted successfully.');
+      }
+    }
+
+    return { success: true, orderId: pedidoId, message: 'Pedido creado exitosamente.' };
+
+  } catch (e: any) {
+    console.error("[createOrderAction] Critical error:", e.message);
+    return { success: false, message: `Error inesperado al crear el pedido: ${e.message}` };
   }
 }

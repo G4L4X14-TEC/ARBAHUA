@@ -19,10 +19,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home as HomeIcon, AlertTriangle } from "lucide-react"; // AlertTriangle añadido
+import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home as HomeIcon, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
-import { saveShippingAddressAction, createPaymentIntentAction } from "@/app/actions/checkoutActions"; 
+import { saveShippingAddressAction, createPaymentIntentAction, createOrderAction } from "@/app/actions/checkoutActions"; 
 import { useForm, FormProvider, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -31,7 +31,6 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import {
@@ -42,7 +41,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { loadStripe, type Stripe as StripeJS } from '@stripe/stripe-js';
+import { loadStripe, type Stripe as StripeJS, type StripeCardElement } from '@stripe/stripe-js';
 import {
   Elements,
   CardElement,
@@ -50,7 +49,6 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 
-// Esquema de validación para el formulario de envío
 const shippingFormSchema = z.object({
   nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
   direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
@@ -62,7 +60,6 @@ const shippingFormSchema = z.object({
 });
 export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
-
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
@@ -70,7 +67,6 @@ const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && typeof window !== 'undefined') {
   console.error("CRITICAL: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY no está definida. Stripe no funcionará.");
 }
-
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -97,7 +93,7 @@ export default function CheckoutPage() {
       nombreCompleto: "",
       direccion: "",
       ciudad: "",
-      estado: "",
+      estado: "", // Añadido para consistencia con el schema
       codigoPostal: "",
       pais: "México", 
       telefono: "",
@@ -161,7 +157,6 @@ export default function CheckoutPage() {
     }
   }, [isShippingFormValidAndSubmitted]);
 
-
   const calculateTotal = () => {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
@@ -219,7 +214,6 @@ export default function CheckoutPage() {
     );
   }
 
-  // No mostrar contenido si se está cargando el carrito y aún no hay error, para evitar flash de "carrito vacío"
   if (isLoadingCart) { 
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
@@ -230,7 +224,6 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0 && typeof window !== 'undefined' && window.location.pathname === '/checkout') {
-     // Este caso debería ser manejado por el useEffect que redirige, pero como fallback:
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -270,15 +263,18 @@ export default function CheckoutPage() {
           <section className="lg:col-span-2 space-y-8">
             <ShippingForm 
               onSubmitSuccess={handleShippingSubmitSuccess}
-              isSubmittingParent={isSavingAddress || shippingForm.formState.isSubmitting} 
+              isSubmittingParent={isSavingAddress} 
             />
             
-            {isShippingFormValidAndSubmitted && shippingData && (
+            {isShippingFormValidAndSubmitted && shippingData && savedAddressId && cartItems.length > 0 && (
               <div ref={paymentSectionRef}> 
                 <PaymentSection 
                   isShippingComplete={isShippingFormValidAndSubmitted}
                   shippingValues={shippingData}
                   userEmail={user?.email || 'no-email@example.com'}
+                  cartItems={cartItems}
+                  savedAddressId={savedAddressId}
+                  totalAmountInCents={Math.round(calculateTotal() * 100)}
                 />
               </div>
             )}
@@ -394,7 +390,7 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
                   </FormItem>
                 )}
               />
-               <FormField
+              <FormField
                 control={form.control}
                 name="estado"
                 render={({ field }) => (
@@ -436,7 +432,6 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
                         </FormControl>
                         <SelectContent>
                         <SelectItem value="México">México</SelectItem>
-                        {/* Aquí puedes añadir más países si es necesario */}
                         </SelectContent>
                     </Select>
                     <FormMessage />
@@ -475,14 +470,21 @@ interface PaymentSectionProps {
   isShippingComplete: boolean;
   shippingValues: ShippingFormValues; 
   userEmail: string;
+  cartItems: CartItemForDisplay[]; // Añadido para pasarlo a createOrderAction
+  savedAddressId: string; // Añadido para pasarlo a createOrderAction
+  totalAmountInCents: number; // Añadido para pasarlo a createOrderAction
 }
 
-function PaymentSection({ isShippingComplete, shippingValues, userEmail }: PaymentSectionProps) {
-  const { toast } = useToast(); // Asegurar que useToast esté aquí si se usa
-  const shippingFormContext = useFormContext<ShippingFormValues>(); // Obtener contexto del formulario de envío
-
-  console.log("[PaymentSection] Shipping form is valid:", shippingFormContext?.formState?.isValid);
-
+function PaymentSection({ 
+  isShippingComplete, 
+  shippingValues, 
+  userEmail,
+  cartItems,
+  savedAddressId,
+  totalAmountInCents
+}: PaymentSectionProps) {
+  const { toast } = useToast();
+  const shippingFormContext = useFormContext<ShippingFormValues>(); 
 
   if (!stripePromise) {
      console.error("Stripe.js no se ha cargado. Clave publicable podría estar faltando.");
@@ -495,7 +497,7 @@ function PaymentSection({ isShippingComplete, shippingValues, userEmail }: Payme
         </CardHeader>
         <CardContent>
           <p>
-            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada en tus variables de entorno (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
+            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada.
           </p>
         </CardContent>
       </Card>
@@ -513,14 +515,14 @@ function PaymentSection({ isShippingComplete, shippingValues, userEmail }: Payme
         </CardDescription>
       </CardHeader>
       <CardContent>
-          <Elements stripe={stripePromise} options={{
-            // Aquí puedes añadir opciones de Elements si las necesitas, como apariencia.
-            // Ver: https://stripe.com/docs/js/elements_object/create_elements#elements_create-options
-          }}>
+          <Elements stripe={stripePromise}>
             <StripePaymentForm 
                 shippingValues={shippingValues} 
-                isShippingComplete={isShippingComplete && (shippingFormContext?.formState?.isValid ?? false)} // Solo habilitar si envío completo Y VÁLIDO
+                isShippingComplete={isShippingComplete && (shippingFormContext?.formState?.isValid ?? false)}
                 userEmail={userEmail}
+                cartItems={cartItems}
+                savedAddressId={savedAddressId}
+                totalAmountInCents={totalAmountInCents}
             />
           </Elements>
       </CardContent>
@@ -532,22 +534,31 @@ interface StripePaymentFormProps {
   shippingValues: ShippingFormValues;
   isShippingComplete: boolean;
   userEmail: string;
+  cartItems: CartItemForDisplay[];
+  savedAddressId: string;
+  totalAmountInCents: number;
 }
 
-function StripePaymentForm({ shippingValues, isShippingComplete, userEmail }: StripePaymentFormProps) {
+function StripePaymentForm({ 
+  shippingValues, 
+  isShippingComplete, 
+  userEmail,
+  cartItems,
+  savedAddressId,
+  totalAmountInCents
+}: StripePaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
+  const router = useRouter();
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
-  const router = useRouter(); 
 
   const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPaymentError(null);
 
-    if (!isShippingComplete) { // Doble verificación
-      setPaymentError("Por favor, completa y guarda primero tu información de envío.");
+    if (!isShippingComplete) {
       toast({ title: "Información Incompleta", description: "Completa y guarda tu dirección de envío antes de pagar.", variant: "destructive" });
       return;
     }
@@ -588,7 +599,7 @@ function StripePaymentForm({ shippingValues, isShippingComplete, userEmail }: St
         intentResult.clientSecret,
         {
           payment_method: {
-            card: cardElement,
+            card: cardElement as StripeCardElement, // Type assertion
             billing_details: {
               name: shippingValues.nombreCompleto,
               email: userEmail, 
@@ -614,20 +625,36 @@ function StripePaymentForm({ shippingValues, isShippingComplete, userEmail }: St
       }
 
       if (paymentIntent?.status === 'succeeded') {
-        console.log("[StripePaymentForm] ¡Pago exitoso! PaymentIntent ID:", paymentIntent.id);
-        toast({
-          title: "¡Pago Exitoso!",
-          description: "Gracias por tu compra. Tu pedido se está procesando.",
-          duration: 5000,
-        });
-        // TODO:
-        // 1. Crear la orden en tu base de datos (tablas pedidos, detalle_pedido).
-        // 2. Limpiar el carrito del usuario.
-        // 3. Redirigir a una página de confirmación de orden o al perfil del usuario.
-        router.push('/user-profile?order_success=true'); 
+        console.log("[StripePaymentForm] ¡Pago exitoso! PaymentIntent ID:", paymentIntent.id, "Monto:", paymentIntent.amount);
+        
+        // 3. Crear la orden en la base de datos
+        console.log("[StripePaymentForm] 3. Creando orden en la base de datos...");
+        const orderResult = await createOrderAction(
+          cartItems, 
+          savedAddressId, 
+          paymentIntent.id, 
+          paymentIntent.amount // Stripe devuelve el monto en centavos
+        );
+
+        if (orderResult.success && orderResult.orderId) {
+          toast({
+            title: "¡Pedido Creado Exitosamente!",
+            description: `Gracias por tu compra. Tu ID de orden es: ${orderResult.orderId}.`,
+            duration: 7000,
+          });
+          // TODO: Limpiar el carrito del usuario.
+          // TODO: Redirigir a una página de confirmación de orden o al perfil del usuario.
+          router.push('/user-profile?order_success=true'); 
+        } else {
+          console.error("[StripePaymentForm] Error creando orden en la base de datos:", orderResult.message);
+          // El pago fue exitoso, pero la creación de la orden falló. Esto es un estado problemático.
+          // Se debería notificar al usuario y posiblemente al administrador.
+          setPaymentError(`El pago fue exitoso, pero hubo un problema al registrar tu orden: ${orderResult.message}. Por favor, contacta a soporte.`);
+          toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado, pero no pudimos registrar tu orden. Por favor, contacta a soporte con el ID de transacción: ${paymentIntent.id}`, variant: "destructive", duration: 10000 });
+        }
       } else {
         console.warn("[StripePaymentForm] Estado del PaymentIntent no exitoso:", paymentIntent?.status);
-        const errorMessage = paymentIntent?.last_payment_error?.message || \`Estado del pago: \${paymentIntent?.status}. Por favor, intenta de nuevo.\`;
+        const errorMessage = paymentIntent?.last_payment_error?.message || `Estado del pago: ${paymentIntent?.status}. Por favor, intenta de nuevo.`;
         setPaymentError(errorMessage);
         toast({ title: "Estado del Pago Incierto", description: errorMessage, variant: "destructive"});
       }
@@ -659,7 +686,6 @@ function StripePaymentForm({ shippingValues, isShippingComplete, userEmail }: St
     hidePostalCode: true, 
   };
 
-
   return (
     <form onSubmit={handleSubmitPayment} className="space-y-4">
       <Label htmlFor="card-element">Datos de la Tarjeta</Label>
@@ -685,4 +711,3 @@ function StripePaymentForm({ shippingValues, isShippingComplete, userEmail }: St
   );
 }
 
-```
