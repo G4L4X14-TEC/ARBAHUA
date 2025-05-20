@@ -16,8 +16,8 @@ export type CartItemForDisplay = Tables<'items_carrito'> & {
 };
 
 // Helper para crear el cliente de Supabase en Server Actions
-function createSupabaseServerClientAction() {
-  const cookieStore = cookies(); // Llamar a cookies() una vez y de forma síncrona
+async function createSupabaseServerClientAction() { // Marcado como async
+  const cookieStore = await cookies(); // Usando await
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -39,21 +39,10 @@ function createSupabaseServerClientAction() {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          // El try...catch puede ser omitido aquí si la documentación de @supabase/ssr no lo requiere
-          // o si Next.js maneja esto de forma diferente en Server Actions.
-          // Lo mantendremos por ahora, pero si causa problemas se puede quitar.
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch (error) {
-            // Silently ignore (e.g. if called from a static generation context)
-          }
+          cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.delete({ name, ...options }); // Usar delete en lugar de set con valor vacío
-          } catch (error) {
-            // Silently ignore
-          }
+          cookieStore.delete({ name, ...options });
         },
       },
     }
@@ -62,7 +51,7 @@ function createSupabaseServerClientAction() {
 
 export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
   console.log('[getCartItemsAction] Attempting to fetch cart items.');
-  const supabase = createSupabaseServerClientAction(); // Llamada síncrona
+  const supabase = await createSupabaseServerClientAction(); // Usando await
   if (!supabase) {
     console.error("[getCartItemsAction] Supabase client not initialized.");
     return [];
@@ -123,7 +112,6 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
     console.log(\`[getCartItemsAction] Fetched \${itemsData.length} cart items.\`);
 
     const cartItemsForDisplay: CartItemForDisplay[] = itemsData.map(item => {
-      // Ajuste de tipado para 'productos' y 'imagenes_productos'
       const producto = item.productos as (Pick<Tables<'productos'>, 'id' | 'nombre' | 'precio'> & {
         imagenes_productos: Array<Pick<Tables<'imagenes_productos'>, 'url' | 'es_principal'>> | null;
       }) | null;
@@ -167,7 +155,7 @@ export async function addProductToCartAction(
   quantityToAdd: number = 1
 ): Promise<{ success: boolean; message: string }> {
   console.log('[addProductToCartAction] Called with productId:', productId, "quantityToAdd:", quantityToAdd);
-  const supabase = createSupabaseServerClientAction(); // Llamada síncrona
+  const supabase = await createSupabaseServerClientAction(); // Usando await
   if (!supabase) {
     return { success: false, message: "Error de conexión con el servidor." };
   }
@@ -261,3 +249,5 @@ export async function addProductToCartAction(
     return { success: false, message: \`Error inesperado: \${e.message}\` };
   }
 }
+
+    
