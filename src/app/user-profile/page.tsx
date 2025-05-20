@@ -140,7 +140,7 @@ export default function UserProfilePage() {
         .single();
 
       if (profileError) {
-        toast({ title: "Error de Perfil", description: \`No se pudo cargar tu perfil: \${profileError.message}\`, variant: "destructive" });
+        toast({ title: "Error de Perfil", description: `No se pudo cargar tu perfil: ${profileError.message}`, variant: "destructive" });
         setProfile(null); 
       } else if (!profileData) {
         toast({ title: "Perfil No Encontrado", description: "No se encontraron datos de perfil para tu cuenta.", variant: "destructive" });

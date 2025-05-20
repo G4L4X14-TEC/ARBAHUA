@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -5,7 +6,7 @@ import * as LabelPrimitive from "@radix-ui/react-label"
 import { Slot } from "@radix-ui/react-slot"
 import {
   Controller,
-  FormProvider,
+  FormProvider as RHFFormProvider, // react-hook-form's FormProvider is aliased to RHFFormProvider
   useFormContext,
   type ControllerProps,
   type FieldPath,
@@ -15,7 +16,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Label } from "@/components/ui/label"
 
-const Form = FormProvider
+const Form = RHFFormProvider // The 'Form' component is essentially RHFFormProvider
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
@@ -168,11 +169,12 @@ FormMessage.displayName = "FormMessage"
 
 export {
   useFormField,
-  Form,
+  Form, // This is RHFFormProvider, so it can be used as <Form {...methods}>
   FormItem,
   FormLabel,
   FormControl,
   FormDescription,
   FormMessage,
   FormField,
+  RHFFormProvider as FormProvider, // Explicitly export RHFFormProvider as FormProvider
 }
