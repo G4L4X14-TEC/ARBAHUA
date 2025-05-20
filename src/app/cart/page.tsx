@@ -11,7 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Loader2, ShoppingCart, Trash2, Plus, Minus, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
+import { 
+  getCartItemsAction, 
+  updateCartItemQuantityAction, 
+  removeProductFromCartAction,
+  type CartItemForDisplay 
+} from "@/app/actions/cartPageActions";
 
 export default function CartPage() {
   const router = useRouter();
@@ -21,11 +26,14 @@ export default function CartPage() {
   const [cartItems, setCartItems] = React.useState<CartItemForDisplay[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [isUpdatingQuantity, setIsUpdatingQuantity] = React.useState<Record<string, boolean>>({});
+  const [isRemovingItem, setIsRemovingItem] = React.useState<Record<string, boolean>>({});
+
 
   const fetchCart = React.useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
     console.log("[CartPage] Fetching cart items...");
+    setIsLoading(true); // Set loading true at the start of fetch
+    setError(null);
     try {
       const items = await getCartItemsAction();
       console.log("[CartPage] Cart items fetched:", items);
@@ -72,27 +80,38 @@ export default function CartPage() {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
 
-  // Las funciones handleRemoveItem y handleUpdateQuantity son placeholders
-  // La lógica real se implementará cuando abordemos las acciones de modificar el carrito.
   const handleRemoveItem = async (productId: string) => {
-    console.log("Solicitud para eliminar producto del carrito (ID de producto):", productId);
-    // Aquí iría la llamada a una Server Action para eliminar el item.
-    // Ejemplo: await removeProductFromCartAction(productId);
-    // Y luego, re-fetch del carrito: fetchCart();
-    toast({ title: "Función no implementada", description: "La eliminación de productos del carrito se añadirá pronto."});
+    setIsRemovingItem(prev => ({ ...prev, [productId]: true }));
+    console.log("[CartPage] Attempting to remove product from cart, productId:", productId);
+    const result = await removeProductFromCartAction(productId);
+    if (result.success) {
+      toast({ title: "Producto Eliminado", description: result.message });
+      fetchCart(); // Recargar el carrito
+    } else {
+      toast({ title: "Error", description: result.message, variant: "destructive" });
+    }
+    setIsRemovingItem(prev => ({ ...prev, [productId]: false }));
   };
 
   const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
-    if (newQuantity < 1) {
-      toast({ title: "Cantidad inválida", description: "La cantidad no puede ser menor a 1.", variant: "destructive" });
+    if (newQuantity < 0) { // Allow 0 for removal by the action itself
+      toast({ title: "Cantidad inválida", description: "La cantidad no puede ser negativa.", variant: "destructive" });
       return;
     }
-    console.log("Solicitud para actualizar cantidad (ID de producto):", productId, "Nueva cantidad:", newQuantity);
-    // Aquí iría la llamada a una Server Action para actualizar la cantidad.
-    // Ejemplo: await updateCartItemQuantityAction(productId, newQuantity);
-    // Y luego, re-fetch del carrito: fetchCart();
-    toast({ title: "Función no implementada", description: "La actualización de cantidades se añadirá pronto."});
+    setIsUpdatingQuantity(prev => ({ ...prev, [productId]: true }));
+    console.log("[CartPage] Attempting to update quantity for productId:", productId, "to newQuantity:", newQuantity);
+    
+    const result = await updateCartItemQuantityAction(productId, newQuantity);
+    
+    if (result.success) {
+      toast({ title: "Carrito Actualizado", description: result.message });
+      fetchCart(); // Recargar el carrito
+    } else {
+      toast({ title: "Error", description: result.message, variant: "destructive" });
+    }
+    setIsUpdatingQuantity(prev => ({ ...prev, [productId]: false }));
   };
+
 
   if (isLoading) {
     return (
@@ -157,7 +176,6 @@ export default function CartPage() {
         <div className="lg:w-2/3 space-y-6">
           <h1 className="text-3xl font-bold text-primary mb-6">Tu Carrito de Compras</h1>
           {cartItems.map((item) => (
-            // Usamos item.productos.id como key ya que cada producto es único en el carrito
             <Card key={item.productos.id} className="flex flex-col sm:flex-row gap-4 p-4 shadow-md">
               <div className="relative w-full sm:w-28 h-36 sm:h-28 rounded-md overflow-hidden bg-muted flex-shrink-0">
                 <Image
@@ -174,7 +192,7 @@ export default function CartPage() {
                   <Link href={`/products/${item.productos.id}`} className="hover:underline">
                     <h2 className="text-lg font-semibold text-foreground">{item.productos.nombre}</h2>
                   </Link>
-                  <p className="text-sm text-muted-foreground">Precio unitario: MXN\${(item.productos.precio || 0).toFixed(2)}</p>
+                  <p className="text-sm text-muted-foreground">Precio unitario: MXN${(item.productos.precio || 0).toFixed(2)}</p>
                 </div>
                 <div className="flex items-center justify-between mt-2 sm:mt-0">
                   <div className="flex items-center gap-2">
@@ -183,9 +201,9 @@ export default function CartPage() {
                       size="icon" 
                       className="h-7 w-7" 
                       onClick={() => handleUpdateQuantity(item.productos.id, item.cantidad - 1)} 
-                      disabled={item.cantidad <= 1}
+                      disabled={isUpdatingQuantity[item.productos.id] || isRemovingItem[item.productos.id] }
                     >
-                      <Minus className="h-3 w-3" />
+                      {isUpdatingQuantity[item.productos.id] && item.cantidad -1 < item.cantidad ? <Loader2 className="h-3 w-3 animate-spin"/> : <Minus className="h-3 w-3" />}
                     </Button>
                     <span className="text-sm w-8 text-center">{item.cantidad}</span>
                     <Button 
@@ -193,11 +211,12 @@ export default function CartPage() {
                       size="icon" 
                       className="h-7 w-7" 
                       onClick={() => handleUpdateQuantity(item.productos.id, item.cantidad + 1)}
+                      disabled={isUpdatingQuantity[item.productos.id] || isRemovingItem[item.productos.id]}
                     >
-                      <Plus className="h-3 w-3" />
+                       {isUpdatingQuantity[item.productos.id] && item.cantidad + 1 > item.cantidad ? <Loader2 className="h-3 w-3 animate-spin"/> : <Plus className="h-3 w-3" />}
                     </Button>
                   </div>
-                  <p className="text-md font-semibold text-primary">Subtotal: MXN\${item.subtotal.toFixed(2)}</p>
+                  <p className="text-md font-semibold text-primary">Subtotal: MXN${item.subtotal.toFixed(2)}</p>
                 </div>
               </div>
               <Button 
@@ -205,8 +224,9 @@ export default function CartPage() {
                 size="icon" 
                 className="text-destructive hover:bg-destructive/10 self-start sm:self-center" 
                 onClick={() => handleRemoveItem(item.productos.id)}
+                disabled={isRemovingItem[item.productos.id] || isUpdatingQuantity[item.productos.id]}
               >
-                <Trash2 className="h-5 w-5" />
+                {isRemovingItem[item.productos.id] ? <Loader2 className="h-5 w-5 animate-spin"/> :  <Trash2 className="h-5 w-5" />}
                 <span className="sr-only">Eliminar</span>
               </Button>
             </Card>
@@ -221,8 +241,8 @@ export default function CartPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal ({cartItems.length} {cartItems.length === 1 ? 'item' : 'items'})</span>
-                <span>MXN\${calculateTotal().toFixed(2)}</span>
+                <span>Subtotal ({cartItems.length} {cartItems.length === 1 ? 'artículo' : 'artículos'})</span>
+                <span>MXN${calculateTotal().toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Envío Estimado</span>
@@ -231,7 +251,7 @@ export default function CartPage() {
               <hr/>
               <div className="flex justify-between text-xl font-bold text-foreground">
                 <span>Total Estimado</span>
-                <span>MXN\${calculateTotal().toFixed(2)}</span>
+                <span>MXN${calculateTotal().toFixed(2)}</span>
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
@@ -248,5 +268,3 @@ export default function CartPage() {
     </main>
   );
 }
-
-    
