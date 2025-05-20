@@ -20,10 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home } from "lucide-react";
-import { useToast } from "@/hooks/use-toast"; // Import principal de useToast
+import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
 
-// Placeholder para ShippingFormValues -  definiremos esto correctamente después
+// Placeholder para ShippingFormValues
 type ShippingFormValues = {
   nombreCompleto: string;
   direccion: string;
@@ -36,7 +36,7 @@ type ShippingFormValues = {
 export default function CheckoutPage() {
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
-  const { toast } = useToast(); // toast está disponible en el scope de CheckoutPage
+  const { toast } = useToast(); 
   
   const [user, setUser] = React.useState<User | null>(null);
   const [isLoadingUser, setIsLoadingUser] = React.useState(true);
@@ -44,7 +44,6 @@ export default function CheckoutPage() {
   const [isLoadingCart, setIsLoadingCart] = React.useState(true);
   const [errorCart, setErrorCart] = React.useState<string | null>(null);
 
-  // 1. Verificar autenticación del usuario
   React.useEffect(() => {
     const fetchUser = async () => {
       setIsLoadingUser(true);
@@ -69,7 +68,6 @@ export default function CheckoutPage() {
     fetchUser();
   }, [supabase, router, toast]);
 
-  // 2. Obtener ítems del carrito si el usuario está autenticado
   React.useEffect(() => {
     if (user && !isLoadingUser) { 
       const fetchCart = async () => {
@@ -105,14 +103,6 @@ export default function CheckoutPage() {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
 
-  // Placeholder para la lógica de pago
-  const handleProceedToPayment = async (shippingData: ShippingFormValues) => {
-    // Esta función ahora se llamará desde PaymentSection
-    console.log("Procediendo al pago con datos de envío (simulación):", shippingData);
-    // Aquí iría la lógica para crear PaymentIntent, confirmar pago con Stripe, crear orden en BD, etc.
-    // Por ahora, el toast se maneja dentro de PaymentSection
-  };
-
   if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0 && !errorCart) ) {
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
@@ -143,7 +133,6 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0) {
-    // Este caso ya está cubierto por el useEffect que redirige, pero como salvaguarda.
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -175,29 +164,18 @@ export default function CheckoutPage() {
       <h1 className="text-3xl font-bold text-primary mb-8 text-center">Proceso de Pago</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
-        {/* Columna de Resumen del Pedido */}
         <section className="lg:col-span-1 lg:order-last">
           <OrderSummary items={cartItems} total={calculateTotal()} />
         </section>
 
-        {/* Columna de Envío y Pago */}
         <section className="lg:col-span-2 space-y-8">
-          {/* ShippingForm podría necesitar acceso a los datos del formulario para pasarlos a handleProceedToPayment */}
-          {/* Por ahora, lo mantenemos simple. En una implementación real, usaríamos react-hook-form aquí. */}
-          <ShippingForm onSubmit={() => { /* Lógica futura o estado gestionado globalmente */}} />
-          <PaymentSection 
-            // Si ShippingForm y PaymentSection necesitan coordinarse, 
-            // el estado del formulario de envío debería vivir en CheckoutPage
-            // y pasarse a handleProceedToPayment desde aquí.
-            // onProcessPayment={handleProceedToPayment} 
-          />
+          <ShippingForm />
+          <PaymentSection />
         </section>
       </div>
     </main>
   );
 }
-
-// --- Componentes Internos ---
 
 interface OrderSummaryProps {
   items: CartItemForDisplay[];
@@ -242,11 +220,8 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
   );
 }
 
-interface ShippingFormProps {
-  onSubmit: (data: ShippingFormValues) => void; 
-}
-
-function ShippingForm({ onSubmit }: ShippingFormProps) {
+function ShippingForm() {
+  // Placeholder para el estado del formulario. En una implementación real, usaríamos react-hook-form.
   const [formData, setFormData] = React.useState<ShippingFormValues>({
     nombreCompleto: '',
     direccion: '',
@@ -259,10 +234,6 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
-  
-  // En una implementación completa, este formulario tendría su propio botón de "Guardar Dirección" 
-  // o los datos se pasarían al componente padre para ser usados en el proceso de pago.
-  // Por ahora, no tiene un botón de envío propio.
 
   return (
     <Card className="shadow-lg">
@@ -282,6 +253,7 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
             <Label htmlFor="direccion">Dirección (Calle y Número, Colonia, Referencias)</Label>
             <Input id="direccion" name="direccion" value={formData.direccion} onChange={handleChange} required placeholder="Av. Siempre Viva 742, Col. Springfield"/>
           </div>
+          
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="ciudad">Ciudad</Label>
@@ -292,6 +264,7 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
               <Input id="codigoPostal" name="codigoPostal" value={formData.codigoPostal} onChange={handleChange} required placeholder="01234"/>
             </div>
           </div>
+
            <div>
             <Label htmlFor="pais">País</Label>
             <Input id="pais" name="pais" value={formData.pais} onChange={handleChange} required />
@@ -306,35 +279,23 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
   );
 }
 
-// Podríamos pasar onProcessPayment como prop si necesitamos que llame a handleProceedToPayment del componente padre
-// interface PaymentSectionProps {
-//   onProcessPayment: (shippingData: ShippingFormValues) => Promise<void>;
-// }
-
-function PaymentSection(/* { onProcessPayment }: PaymentSectionProps */) {
+function PaymentSection() {
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
-  const { toast } = useToast(); // Llamar a useToast aquí
+  const { toast } = useToast();
 
   const handleSimulatePayment = () => {
     setIsLoadingPayment(true);
-    // En una implementación real, aquí obtendrías los datos del formulario de envío (ShippingForm)
-    // y los pasarías a una función que maneje la creación del PaymentIntent, etc.
-    // const shippingDataFromForm = ... (necesitaríamos estado compartido o react-hook-form a nivel de CheckoutPage)
-    // await onProcessPayment(shippingDataFromForm); 
-    
-    console.log("Simulando envío de pago...");
-    toast({ // Ahora 'toast' está definido en este scope
+    toast({
       title: "Procesando Pago (Simulación)",
       description: "La integración real con Stripe se implementará después.",
     });
     setTimeout(() => {
       setIsLoadingPayment(false);
-      // Aquí podría haber una redirección o un mensaje de éxito/error.
       toast({
         title: "Pago Simulado Exitoso",
         description: "¡Gracias por tu compra (simulada)!",
       });
-      // router.push('/user-profile/orders'); // Ejemplo de redirección
+      // Aquí podrías redirigir, e.g., router.push('/user-profile/orders');
     }, 2000);
   };
 
@@ -367,4 +328,3 @@ function PaymentSection(/* { onProcessPayment }: PaymentSectionProps */) {
   );
 }
 
-    
