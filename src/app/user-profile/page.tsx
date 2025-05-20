@@ -25,13 +25,17 @@ import {
   CheckCircle2,
   ClipboardList,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  MapPin,
+  Settings,
+  KeyRound
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Tables } from "@/lib/supabase/database.types";
+import type { Tables } from "@/lib/supabase/database.types";
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getUserOrdersAction, type UserOrderForDisplay } from "@/app/actions/userProfileActions";
 
 export default function UserProfilePage() {
@@ -52,7 +56,7 @@ export default function UserProfilePage() {
   React.useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL 
+      // Opcional: limpiar el parámetro de la URL para que el mensaje no reaparezca en cada recarga.
       // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
@@ -90,7 +94,7 @@ export default function UserProfilePage() {
   }, [supabase, router, toast]);
 
   React.useEffect(() => {
-    if (user) { // Solo cargar pedidos si el usuario está disponible
+    if (user && !isLoading) { 
       const fetchOrders = async () => {
         console.log('[UserProfilePage] Fetching orders for user:', user.id);
         setIsLoadingOrders(true);
@@ -109,32 +113,32 @@ export default function UserProfilePage() {
       };
       fetchOrders();
     }
-  }, [user, toast]); // Dependencia de 'user'
+  }, [user, isLoading, toast]); // Dependencia de isLoading también, para asegurar que user y profile estén listos
 
   const handleSignOut = async () => {
-    setIsLoading(true);
+    setIsLoading(true); // O un estado de loading específico para el logout
     await supabase.auth.signOut();
     router.push('/');
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
-    router.refresh();
-    setIsLoading(false);
+    router.refresh(); // Importante para que la Navbar y otros componentes se actualicen
+    // No es necesario setIsLoading(false) aquí porque la página redirigirá o recargará.
   };
 
-  const getOrderStatusBadgeVariant = (status: Tables<'pedidos'>['estado']): "default" | "secondary" | "destructive" | "outline" => {
+  const getOrderStatusBadgeVariant = (status?: Tables<'pedidos'>['estado'] | null): "default" | "secondary" | "destructive" | "outline" => {
+    if (!status) return 'outline';
     switch (status) {
       case 'Pagado':
       case 'Enviado':
       case 'Entregado':
-        return 'default'; // Verde o color primario por defecto de Badge
+        return 'default'; 
       case 'Pendiente':
-        return 'secondary'; // Gris o color secundario
+        return 'secondary'; 
       case 'Cancelado':
-        return 'destructive'; // Rojo
+        return 'destructive';
       default:
         return 'outline';
     }
   };
-
 
   if (isLoading) {
     return (
@@ -145,16 +149,17 @@ export default function UserProfilePage() {
     );
   }
 
-  if (!user) {
-    // Esto no debería pasar si la redirección en el primer useEffect funciona, pero es un fallback.
+  if (!user || !profile) {
+    // Esta condición ya debería estar cubierta por la redirección en useEffect,
+    // pero es un fallback por si el perfil no se carga pero el usuario sí.
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle className="text-destructive">Acceso Denegado</CardTitle>
+            <CardTitle className="text-destructive">Error al Cargar Perfil</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>Debes iniciar sesión para ver esta página.</p>
+            <p>No se pudo cargar la información de tu perfil. Por favor, intenta iniciar sesión de nuevo.</p>
             <Button onClick={() => router.push('/login?redirect=/user-profile')} className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">Ir a Iniciar Sesión</Button>
           </CardContent>
         </Card>
@@ -163,152 +168,195 @@ export default function UserProfilePage() {
   }
 
   return (
-    <main className="container mx-auto px-4 py-8">
-      {showOrderSuccessMessage && (
-        <Alert variant="default" className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/30">
-          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-          <AlertTitle className="font-semibold text-green-700 dark:text-green-300">¡Pedido Realizado con Éxito!</AlertTitle>
-          <AlertDescription className="text-green-600 dark:text-green-400">
-            Gracias por tu compra. Hemos recibido tu pedido y lo estamos procesando.
-          </AlertDescription>
-        </Alert>
-      )}
+    <TooltipProvider>
+      <main className="container mx-auto px-4 py-8">
+        {showOrderSuccessMessage && (
+          <Alert variant="default" className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/30">
+            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <AlertTitle className="font-semibold text-green-700 dark:text-green-300">¡Pedido Realizado con Éxito!</AlertTitle>
+            <AlertDescription className="text-green-600 dark:text-green-400">
+              Gracias por tu compra. Hemos recibido tu pedido y lo estamos procesando. Puedes ver los detalles en "Mis Pedidos".
+            </AlertDescription>
+          </Alert>
+        )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Columna de Perfil y Acciones */}
-        <section className="md:col-span-1 space-y-6">
-          <Card className="shadow-xl">
-            <CardHeader className="text-center border-b pb-6">
-              <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 mb-4">
-                <UserCircle className="h-12 w-12 text-primary" />
-              </div>
-              <CardTitle className="text-3xl font-bold text-primary">
-                {profile?.nombre || user.email}
-              </CardTitle>
-              {profile?.rol && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Columna de Perfil y Acciones */}
+          <section className="md:col-span-1 space-y-6">
+            <Card className="shadow-xl">
+              <CardHeader className="text-center border-b pb-6">
+                <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 mb-4">
+                  <UserCircle className="h-12 w-12 text-primary" />
+                </div>
+                <CardTitle className="text-3xl font-bold text-primary">
+                  {profile.nombre || user.email}
+                </CardTitle>
                 <CardDescription className="text-muted-foreground pt-1 capitalize">
                   {profile.rol}
                 </CardDescription>
-              )}
-            </CardHeader>
-            <CardContent className="p-6 space-y-2">
-              <h3 className="text-lg font-semibold text-earthy-green">Información de la Cuenta</h3>
-              <div className="text-sm text-foreground space-y-1">
-                <p><span className="font-medium">Nombre:</span> {profile?.nombre || 'No especificado'}</p>
-                <p><span className="font-medium">Email:</span> {user.email}</p>
-                {profile?.rol && <p><span className="font-medium">Rol:</span> <span className="capitalize">{profile.rol}</span></p>}
-                <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-              </div>
-            </CardContent>
-             <CardFooter className="border-t p-6 flex justify-end">
-               <Button onClick={handleSignOut} variant="destructive" disabled={isLoading}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
-                 Cerrar Sesión
-              </Button>
-            </CardFooter>
-          </Card>
+              </CardHeader>
+              <CardContent className="p-6 space-y-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-earthy-green mb-2">Información de la Cuenta</h3>
+                  <div className="text-sm text-foreground space-y-1">
+                    <p><span className="font-medium">Nombre:</span> {profile.nombre || 'No especificado'}</p>
+                    <p><span className="font-medium">Email:</span> {user.email}</p>
+                    <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                  </div>
+                  {/* Placeholder para editar perfil */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" className="w-full mt-3" disabled>
+                        <Edit3 className="mr-2 h-4 w-4" /> Editar Perfil
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Próximamente: Edita tu nombre y otros datos.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                 <div>
+                  <h3 className="text-lg font-semibold text-earthy-green mt-4 mb-2">Seguridad</h3>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" className="w-full" disabled>
+                        <KeyRound className="mr-2 h-4 w-4" /> Cambiar Contraseña
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Próximamente: Actualiza tu contraseña.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </CardContent>
+              <CardFooter className="border-t p-6 flex justify-end">
+                <Button onClick={handleSignOut} variant="destructive">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Cerrar Sesión
+                </Button>
+              </CardFooter>
+            </Card>
 
-          <Card className="shadow-xl">
-             <CardHeader>
-                <CardTitle className="text-xl text-earthy-green">Acciones Rápidas</CardTitle>
-             </CardHeader>
-             <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
-                    <Heart className="mr-3 h-5 w-5 text-primary" />
-                    <div>
-                    <p className="font-medium">Mis Favoritos</p>
-                    <p className="text-xs text-muted-foreground">Productos guardados (Próximamente).</p>
-                    </div>
-                </Button>
-                <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
-                    <HomeIcon className="mr-3 h-5 w-5 text-primary" />
-                    <div>
-                    <p className="font-medium">Mis Direcciones</p>
-                    <p className="text-xs text-muted-foreground">Gestionar direcciones (Próximamente).</p>
-                    </div>
-                </Button>
-                {profile?.rol === "artesano" && (
-                    <Button onClick={() => router.push('/artisan-dashboard')} variant="outline" className="w-full justify-start text-left h-auto py-3 bg-primary/5 border-primary/30 hover:bg-primary/10">
-                        <Store className="mr-3 h-5 w-5 text-primary" />
-                        <div>
-                            <p className="font-medium">Panel de Artesano</p>
-                            <p className="text-xs text-muted-foreground">Gestionar mi tienda y productos.</p>
-                        </div>
+            {profile.rol === "artesano" && (
+              <Card className="shadow-xl">
+                <CardHeader>
+                    <CardTitle className="text-xl text-earthy-green">Panel de Artesano</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={() => router.push('/artisan-dashboard')} className="w-full bg-primary/80 hover:bg-primary/90 text-primary-foreground">
+                        <Store className="mr-2 h-5 w-5" />
+                        Gestionar mi Tienda
                     </Button>
-                )}
-             </CardContent>
-          </Card>
-        </section>
+                </CardContent>
+              </Card>
+            )}
+          </section>
 
-        {/* Columna de Historial de Pedidos */}
-        <section className="md:col-span-2">
-          <Card className="shadow-xl">
-            <CardHeader>
-              <CardTitle className="text-2xl text-earthy-green flex items-center gap-2">
-                <ClipboardList className="h-6 w-6" />
-                Mis Pedidos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {isLoadingOrders ? (
-                <div className="flex justify-center items-center py-10">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="ml-3 text-muted-foreground">Cargando pedidos...</p>
-                </div>
-              ) : errorOrders ? (
-                 <Alert variant="destructive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{errorOrders}</AlertDescription>
-                  </Alert>
-              ) : orders.length === 0 ? (
-                <div className="text-center py-10 text-muted-foreground">
-                  <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <p>Aún no tienes pedidos.</p>
-                  <Button asChild variant="link" className="mt-2 text-primary">
-                    <Link href="/search">¡Empieza a comprar!</Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {orders.map((order) => (
-                    <Card key={order.id} className="overflow-hidden">
-                      <CardHeader className="flex flex-row justify-between items-center p-4 bg-muted/30">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">
-                            Pedido <span className="text-primary">#{order.id.substring(0, 8)}...</span>
+          {/* Columna de Historial de Pedidos y Otras Secciones */}
+          <section className="md:col-span-2 space-y-6">
+            <Card className="shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-2xl text-earthy-green flex items-center gap-2">
+                  <ClipboardList className="h-6 w-6" />
+                  Mis Pedidos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoadingOrders ? (
+                  <div className="flex justify-center items-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-3 text-muted-foreground">Cargando pedidos...</p>
+                  </div>
+                ) : errorOrders ? (
+                  <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTitle>Error al Cargar Pedidos</AlertTitle>
+                      <AlertDescription>{errorOrders}</AlertDescription>
+                    </Alert>
+                ) : orders.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p>Aún no tienes pedidos.</p>
+                    <Button asChild variant="link" className="mt-2 text-primary">
+                      <Link href="/search">¡Empieza a comprar!</Link>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {orders.map((order) => (
+                      <Card key={order.id} className="overflow-hidden border">
+                        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-muted/30 gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              Pedido <span className="text-primary">#{order.id.substring(0, 8).toUpperCase()}</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {order.formatted_date}
+                            </p>
+                          </div>
+                          <Badge variant={getOrderStatusBadgeVariant(order.estado)} className="capitalize text-xs sm:ml-auto">
+                            {order.estado?.replace('_', ' ') || 'Desconocido'}
+                          </Badge>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-2">
+                          <p className="text-sm">
+                            <span className="font-medium">Total:</span> MXN${order.total.toFixed(2)}
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            {order.formatted_date}
+                          <p className="text-sm text-muted-foreground italic">
+                            <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
                           </p>
-                        </div>
-                        <Badge variant={getOrderStatusBadgeVariant(order.estado)} className="capitalize">
-                          {order.estado.replace('_', ' ')}
-                        </Badge>
-                      </CardHeader>
-                      <CardContent className="p-4 space-y-2">
-                        <p className="text-sm">
-                          <span className="font-medium">Total:</span> MXN${order.total.toFixed(2)}
-                        </p>
-                        <p className="text-sm text-muted-foreground italic">
-                          <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
-                        </p>
-                      </CardContent>
-                      <CardFooter className="p-4 border-t">
-                        <Button variant="outline" size="sm" disabled> {/* Placeholder */}
-                          Ver Detalles
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-      </div>
-    </main>
+                        </CardContent>
+                        <CardFooter className="p-4 border-t">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="outline" size="sm" disabled> 
+                                Ver Detalles
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Próximamente: Ver detalles completos del pedido.</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-xl text-earthy-green flex items-center gap-2"><MapPin className="h-5 w-5" />Mis Direcciones</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">Próximamente: Aquí podrás gestionar tus direcciones de envío guardadas.</p>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" className="w-full" disabled>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Añadir Nueva Dirección
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Próximamente: Añade y gestiona tus direcciones.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-xl text-earthy-green flex items-center gap-2"><Settings className="h-5 w-5" />Preferencias de la Cuenta</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">Próximamente: Configura tus notificaciones por correo, suscripciones y otras preferencias.</p>
+                {/* Placeholder para opciones de preferencias */}
+              </CardContent>
+            </Card>
+            
+          </section>
+        </div>
+      </main>
+    </TooltipProvider>
   );
 }
-
-    
