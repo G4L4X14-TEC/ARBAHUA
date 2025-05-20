@@ -7,10 +7,11 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { UserCircle, Package, ShoppingBag, Heart, LogOut, Edit3, Home } from "lucide-react"; // Heart para wishlist, Package para pedidos, etc.
+import { UserCircle, Package, ShoppingBag, Heart, LogOut, Edit3, Home as HomeIcon, Store } from "lucide-react"; // Store añadido
 import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/lib/supabase/database.types";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 
 export default function UserProfilePage() {
   const router = useRouter();
@@ -27,24 +28,28 @@ export default function UserProfilePage() {
 
       if (authError || !authUser) {
         toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para ver tu perfil.", variant: "destructive" });
-        router.push("/login");
+        router.push("/login?redirect=/user-profile");
         return;
       }
       setUser(authUser);
 
+      console.log("[UserProfilePage] Fetching profile for user ID:", authUser.id);
       const { data: profileData, error: profileError } = await supabase
         .from("usuarios")
         .select("*")
         .eq("id", authUser.id)
         .single();
 
-      if (profileError || !profileData) {
-        toast({ title: "Error de Perfil", description: "No se pudo cargar tu perfil.", variant: "destructive" });
-        // Podrías cerrar sesión aquí también si el perfil es crucial y no existe
-        // await supabase.auth.signOut();
-        // router.push("/login");
-        setProfile(null); // Asegurar que profile sea null si no se encuentra
+      if (profileError) {
+        console.error("[UserProfilePage] Error fetching profile:", profileError);
+        toast({ title: "Error de Perfil", description: `No se pudo cargar tu perfil: ${profileError.message}`, variant: "destructive" });
+        setProfile(null); 
+      } else if (!profileData) {
+        console.warn("[UserProfilePage] Profile data not found for user ID:", authUser.id);
+        toast({ title: "Perfil No Encontrado", description: "No se encontraron datos de perfil para tu cuenta.", variant: "destructive" });
+        setProfile(null);
       } else {
+        console.log("[UserProfilePage] Profile data fetched:", profileData);
         setProfile(profileData);
       }
       setIsLoading(false);
@@ -53,21 +58,28 @@ export default function UserProfilePage() {
   }, [supabase, router, toast]);
 
   const handleSignOut = async () => {
+    setIsLoading(true);
     await supabase.auth.signOut();
+    // El listener en Navbar se encargará de limpiar el estado global y redirigir,
+    // pero también podemos forzar la redirección aquí.
     router.push('/');
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
+    // No necesitamos router.refresh() aquí si Navbar ya lo hace o si la redirección es suficiente.
+    setIsLoading(false);
   };
 
   if (isLoading) {
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
-        <div className="animate-pulse text-primary">Cargando perfil...</div>
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Cargando perfil...</p>
       </main>
     );
   }
 
   if (!user) {
-     // Este caso ya debería ser manejado por el useEffect, pero es una salvaguarda.
+    // Este caso debería ser manejado por el useEffect que redirige a /login,
+    // pero es una salvaguarda.
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
@@ -76,7 +88,7 @@ export default function UserProfilePage() {
           </CardHeader>
           <CardContent>
             <p>Debes iniciar sesión para ver esta página.</p>
-            <Button onClick={() => router.push('/login')} className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">Ir a Iniciar Sesión</Button>
+            <Button onClick={() => router.push('/login?redirect=/user-profile')} className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">Ir a Iniciar Sesión</Button>
           </CardContent>
         </Card>
       </main>
@@ -93,20 +105,22 @@ export default function UserProfilePage() {
           <CardTitle className="text-3xl font-bold text-primary">
             {profile?.nombre || user.email}
           </CardTitle>
-          <CardDescription className="text-muted-foreground pt-1">
-            {profile?.rol === 'cliente' ? 'Cliente' : profile?.rol === 'artesano' ? 'Artesano' : 'Usuario'}
-          </CardDescription>
+          {profile?.rol && (
+            <CardDescription className="text-muted-foreground pt-1 capitalize">
+              {profile.rol}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           <div className="space-y-2">
             <h3 className="text-lg font-semibold text-earthy-green">Información de la Cuenta</h3>
-            <div className="text-sm text-foreground">
+            <div className="text-sm text-foreground space-y-1">
               <p><span className="font-medium">Nombre:</span> {profile?.nombre || 'No especificado'}</p>
               <p><span className="font-medium">Email:</span> {user.email}</p>
-              <p><span className="font-medium">Rol:</span> {profile?.rol || 'No especificado'}</p>
+              {profile?.rol && <p><span className="font-medium">Rol:</span> <span className="capitalize">{profile.rol}</span></p>}
               <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
-            {/* <Button variant="outline" size="sm" className="mt-2">
+            {/* <Button variant="outline" size="sm" className="mt-3">
               <Edit3 className="mr-2 h-4 w-4" /> Editar Información (Próximamente)
             </Button> */}
           </div>
@@ -114,25 +128,25 @@ export default function UserProfilePage() {
           <div className="space-y-4">
              <h3 className="text-lg font-semibold text-earthy-green mb-2">Acciones Rápidas</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Button variant="outline" className="w-full justify-start text-left h-auto py-3">
+              <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
                 <Package className="mr-3 h-5 w-5 text-primary" />
                 <div>
                   <p className="font-medium">Mis Pedidos</p>
-                  <p className="text-xs text-muted-foreground">Ver historial de compras.</p>
+                  <p className="text-xs text-muted-foreground">Ver historial de compras (Próximamente).</p>
                 </div>
               </Button>
-              <Button variant="outline" className="w-full justify-start text-left h-auto py-3">
+              <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
                 <Heart className="mr-3 h-5 w-5 text-primary" />
                  <div>
                   <p className="font-medium">Mis Favoritos</p>
-                  <p className="text-xs text-muted-foreground">Productos guardados.</p>
+                  <p className="text-xs text-muted-foreground">Productos guardados (Próximamente).</p>
                 </div>
               </Button>
-               <Button variant="outline" className="w-full justify-start text-left h-auto py-3">
-                <Home className="mr-3 h-5 w-5 text-primary" />
+               <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
+                <HomeIcon className="mr-3 h-5 w-5 text-primary" />
                  <div>
                   <p className="font-medium">Mis Direcciones</p>
-                  <p className="text-xs text-muted-foreground">Gestionar direcciones de envío.</p>
+                  <p className="text-xs text-muted-foreground">Gestionar direcciones (Próximamente).</p>
                 </div>
               </Button>
               {profile?.rol === "artesano" && (
@@ -148,13 +162,12 @@ export default function UserProfilePage() {
           </div>
         </CardContent>
         <CardFooter className="border-t p-6 flex justify-end">
-           <Button onClick={handleSignOut} variant="destructive">
-            <LogOut className="mr-2 h-4 w-4" /> Cerrar Sesión
+           <Button onClick={handleSignOut} variant="destructive" disabled={isLoading}>
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogOut className="mr-2 h-4 w-4" />}
+             Cerrar Sesión
           </Button>
         </CardFooter>
       </Card>
     </main>
   );
 }
-
-    
