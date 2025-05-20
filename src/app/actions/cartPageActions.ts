@@ -82,7 +82,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
 
     const { data: itemsData, error: itemsError } = await supabase
       .from('items_carrito')
-      .select(\`
+      .select(`
         *,
         productos (
           id,
@@ -93,7 +93,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
             es_principal 
           )
         )
-      \`)
+      `)
       .eq('carrito_id', cartData.id)
       .order('productos(nombre)', { ascending: true });
 
@@ -106,7 +106,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
       console.log('[getCartItemsAction] No items found in cart:', cartData.id);
       return [];
     }
-    console.log(\`[getCartItemsAction] Fetched \${itemsData.length} cart items.\`);
+    console.log(`[getCartItemsAction] Fetched ${itemsData.length} cart items.`);
 
     const cartItemsForDisplay: CartItemForDisplay[] = itemsData.map(item => {
       const producto = item.productos as (Pick<Tables<'productos'>, 'id' | 'nombre' | 'precio'> & {
@@ -114,7 +114,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
       }) | null;
       
       if (!producto) {
-        console.warn(\`[getCartItemsAction] Product details missing for item with producto_id: \${item.producto_id}\`);
+        console.warn(`[getCartItemsAction] Product details missing for item with producto_id: ${item.producto_id}`);
         // Proporcionar valores por defecto para evitar errores de renderizado si producto es null
         return {
           ...item,
@@ -128,7 +128,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
       const principalImage = principalImageArray?.[0];
       const anyImage = producto.imagenes_productos?.[0];
       const placeholderText = encodeURIComponent(producto.nombre);
-      const imageUrl = principalImage?.url || anyImage?.url || \`https://placehold.co/100x100.png?text=\${placeholderText}\`;
+      const imageUrl = principalImage?.url || anyImage?.url || `https://placehold.co/100x100.png?text=${placeholderText}`;
       
       const subtotal = (producto.precio || 0) * item.cantidad;
 
@@ -174,7 +174,7 @@ export async function addProductToCartAction(
 
     if (cartError) {
       console.error('[addProductToCartAction] Error fetching cart:', cartError.message);
-      return { success: false, message: \`Error al obtener el carrito: \${cartError.message}\` };
+      return { success: false, message: `Error al obtener el carrito: ${cartError.message}` };
     }
 
     if (!cart) {
@@ -187,7 +187,7 @@ export async function addProductToCartAction(
       
       if (newCartError || !newCart) {
         console.error('[addProductToCartAction] Error creating new cart:', newCartError?.message);
-        return { success: false, message: \`Error al crear el carrito: \${newCartError?.message || 'Error desconocido'}\` };
+        return { success: false, message: `Error al crear el carrito: ${newCartError?.message || 'Error desconocido'}` };
       }
       cart = newCart;
       console.log('[addProductToCartAction] New cart created with ID:', cart.id);
@@ -206,7 +206,7 @@ export async function addProductToCartAction(
 
     if (existingItemError) {
       console.error('[addProductToCartAction] Error checking for existing item:', existingItemError.message);
-      return { success: false, message: \`Error al verificar el producto en el carrito: \${existingItemError.message}\` };
+      return { success: false, message: `Error al verificar el producto en el carrito: ${existingItemError.message}` };
     }
 
     if (existingItem) {
@@ -220,7 +220,7 @@ export async function addProductToCartAction(
       
       if (updateError) {
         console.error('[addProductToCartAction] Error updating item quantity:', updateError.message);
-        return { success: false, message: \`Error al actualizar la cantidad: \${updateError.message}\` };
+        return { success: false, message: `Error al actualizar la cantidad: ${updateError.message}` };
       }
       console.log('[addProductToCartAction] Item quantity updated to:', newQuantity);
     } else {
@@ -231,7 +231,7 @@ export async function addProductToCartAction(
 
       if (insertError) {
         console.error('[addProductToCartAction] Error inserting new item:', insertError.message);
-        return { success: false, message: \`Error al añadir el producto: \${insertError.message}\` };
+        return { success: false, message: `Error al añadir el producto: ${insertError.message}` };
       }
       console.log('[addProductToCartAction] New item inserted successfully.');
     }
@@ -240,7 +240,7 @@ export async function addProductToCartAction(
 
   } catch (e: any) {
     console.error("[addProductToCartAction] Critical error:", e.message);
-    return { success: false, message: \`Error inesperado: \${e.message}\` };
+    return { success: false, message: `Error inesperado: ${e.message}` };
   }
 }
 
@@ -286,7 +286,7 @@ export async function updateCartItemQuantityAction(
 
     if (updateError) {
       console.error('[updateCartItemQuantityAction] Error updating item quantity:', updateError.message);
-      return { success: false, message: \`Error al actualizar la cantidad: \${updateError.message}\` };
+      return { success: false, message: `Error al actualizar la cantidad: ${updateError.message}` };
     }
     
     console.log('[updateCartItemQuantityAction] Item quantity updated for productId:', productId, 'to newQuantity:', newQuantity);
@@ -294,7 +294,7 @@ export async function updateCartItemQuantityAction(
 
   } catch (e: any) {
     console.error("[updateCartItemQuantityAction] Critical error:", e.message);
-    return { success: false, message: \`Error inesperado: \${e.message}\` };
+    return { success: false, message: `Error inesperado: ${e.message}` };
   }
 }
 
@@ -334,7 +334,7 @@ export async function removeProductFromCartAction(
 
     if (deleteError) {
       console.error('[removeProductFromCartAction] Error deleting item from cart:', deleteError.message);
-      return { success: false, message: \`Error al eliminar el producto: \${deleteError.message}\` };
+      return { success: false, message: `Error al eliminar el producto: ${deleteError.message}` };
     }
 
     console.log('[removeProductFromCartAction] Product removed successfully from cart for productId:', productId);
@@ -342,7 +342,7 @@ export async function removeProductFromCartAction(
 
   } catch (e: any) {
     console.error("[removeProductFromCartAction] Critical error:", e.message);
-    return { success: false, message: \`Error inesperado: \${e.message}\` };
+    return { success: false, message: `Error inesperado: ${e.message}` };
   }
 }
 
@@ -386,7 +386,7 @@ export async function clearCartAction(): Promise<{ success: boolean; message: st
 
     if (deleteItemsError) {
       console.error('[clearCartAction] Error deleting items from cart:', deleteItemsError.message);
-      return { success: false, message: \`Error al limpiar los productos del carrito: \${deleteItemsError.message}\` };
+      return { success: false, message: `Error al limpiar los productos del carrito: ${deleteItemsError.message}` };
     }
 
     console.log('[clearCartAction] Cart items cleared successfully for cart ID:', carritoId);
@@ -394,6 +394,6 @@ export async function clearCartAction(): Promise<{ success: boolean; message: st
 
   } catch (e: any) {
     console.error("[clearCartAction] Critical error in action:", e.message);
-    return { success: false, message: \`Error inesperado al limpiar el carrito: \${e.message}\` };
+    return { success: false, message: `Error inesperado al limpiar el carrito: ${e.message}` };
   }
 }

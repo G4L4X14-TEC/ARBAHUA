@@ -2,24 +2,35 @@
 "use client"; // Necesario para hooks como useRouter y createSupabaseBrowserClient
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Importar useSearchParams
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { UserCircle, Package, ShoppingBag, Heart, LogOut, Edit3, Home as HomeIcon, Store } from "lucide-react"; // Store añadido
+import { UserCircle, Package, ShoppingBag, Heart, LogOut, Edit3, Home as HomeIcon, Store, CheckCircle2 } from "lucide-react"; // CheckCircle2 añadido
 import { useToast } from "@/hooks/use-toast";
 import { Tables } from "@/lib/supabase/database.types";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Importar Alert
 
 export default function UserProfilePage() {
   const router = useRouter();
+  const searchParams = useSearchParams(); // Hook para leer query params
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const [user, setUser] = React.useState<User | null>(null);
   const [profile, setProfile] = React.useState<Tables<'usuarios'> | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [showOrderSuccessMessage, setShowOrderSuccessMessage] = React.useState(false);
+
+  React.useEffect(() => {
+    if (searchParams.get("order_success") === "true") {
+      setShowOrderSuccessMessage(true);
+      // Opcional: limpiar el parámetro de la URL para que el mensaje no se muestre en recargas
+      // router.replace('/user-profile', { scroll: false }); // Descomentar si se desea este comportamiento
+    }
+  }, [searchParams, router]);
 
   React.useEffect(() => {
     const fetchUserData = async () => {
@@ -60,11 +71,9 @@ export default function UserProfilePage() {
   const handleSignOut = async () => {
     setIsLoading(true);
     await supabase.auth.signOut();
-    // El listener en Navbar se encargará de limpiar el estado global y redirigir,
-    // pero también podemos forzar la redirección aquí.
     router.push('/');
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
-    // No necesitamos router.refresh() aquí si Navbar ya lo hace o si la redirección es suficiente.
+    router.refresh();
     setIsLoading(false);
   };
 
@@ -78,8 +87,6 @@ export default function UserProfilePage() {
   }
 
   if (!user) {
-    // Este caso debería ser manejado por el useEffect que redirige a /login,
-    // pero es una salvaguarda.
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
@@ -97,6 +104,16 @@ export default function UserProfilePage() {
 
   return (
     <main className="container mx-auto px-4 py-8">
+      {showOrderSuccessMessage && (
+        <Alert variant="default" className="mb-6 border-green-500 bg-green-50 dark:bg-green-900/30">
+          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <AlertTitle className="font-semibold text-green-700 dark:text-green-300">¡Pedido Realizado con Éxito!</AlertTitle>
+          <AlertDescription className="text-green-600 dark:text-green-400">
+            Gracias por tu compra. Hemos recibido tu pedido y lo estamos procesando.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Card className="w-full max-w-2xl mx-auto shadow-xl">
         <CardHeader className="text-center border-b pb-6">
           <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 mb-4">
@@ -120,21 +137,17 @@ export default function UserProfilePage() {
               {profile?.rol && <p><span className="font-medium">Rol:</span> <span className="capitalize">{profile.rol}</span></p>}
               <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
             </div>
-            {/* <Button variant="outline" size="sm" className="mt-3">
-              <Edit3 className="mr-2 h-4 w-4" /> Editar Información (Próximamente)
-            </Button> */}
+          </div>
+
+          <div className="space-y-4">
+             <h3 className="text-lg font-semibold text-earthy-green mb-2">Mis Pedidos</h3>
+             {/* Aquí irá el listado de pedidos */}
+             <p className="text-sm text-muted-foreground">Próximamente: Aquí podrás ver tu historial de pedidos.</p>
           </div>
 
           <div className="space-y-4">
              <h3 className="text-lg font-semibold text-earthy-green mb-2">Acciones Rápidas</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
-                <Package className="mr-3 h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-medium">Mis Pedidos</p>
-                  <p className="text-xs text-muted-foreground">Ver historial de compras (Próximamente).</p>
-                </div>
-              </Button>
               <Button variant="outline" className="w-full justify-start text-left h-auto py-3" disabled>
                 <Heart className="mr-3 h-5 w-5 text-primary" />
                  <div>
@@ -171,3 +184,5 @@ export default function UserProfilePage() {
     </main>
   );
 }
+
+    
