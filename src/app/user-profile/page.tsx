@@ -1,7 +1,9 @@
+
 "use client"; 
 
-import * as React from "react";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -19,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   Form, 
   FormControl, 
-  FormProvider, // Importado
+  FormProvider,
   FormField, 
   FormItem, 
   FormLabel, 
@@ -72,17 +74,16 @@ import {
   Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Tables, TablesInsert } from "@/lib/supabase/database.types"; 
-import Link from "next/link";
+import type { Tables, TablesInsert, TablesUpdate } from "@/lib/supabase/database.types"; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { 
   getUserOrdersAction, 
-  getUserAddressesAction, // Asegúrate que esté exportado e importado
-  updateUserAddressAction, // Asegúrate que esté exportado e importado
-  deleteUserAddressAction, // Asegúrate que esté exportado e importado
+  getUserAddressesAction,
+  updateUserAddressAction,
+  deleteUserAddressAction,
   type UserOrderForDisplay 
 } from "@/app/actions/userProfileActions";
 import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
@@ -90,32 +91,45 @@ import { shippingFormSchema, type ShippingFormValues } from "@/app/checkout/page
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-export default function UserProfilePage() {
+export const dynamic = 'force-dynamic';
+
+function UserProfileLoading() {
+  return (
+    <main className="container mx-auto px-4 py-8">
+      <div className="flex min-h-[calc(100vh-200px)] flex-col items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Cargando perfil...</p>
+      </div>
+    </main>
+  );
+}
+
+function UserProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   
-  const [user, setUser] = React.useState<User | null>(null);
-  const [profile, setProfile] = React.useState<Tables<'usuarios'> | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [showOrderSuccessMessage, setShowOrderSuccessMessage] = React.useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Tables<'usuarios'> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showOrderSuccessMessage, setShowOrderSuccessMessage] = useState(false);
 
-  const [orders, setOrders] = React.useState<UserOrderForDisplay[]>([]);
-  const [isLoadingOrders, setIsLoadingOrders] = React.useState(true);
-  const [errorOrders, setErrorOrders] = React.useState<string | null>(null);
+  const [orders, setOrders] = useState<UserOrderForDisplay[]>([]);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(true);
+  const [errorOrders, setErrorOrders] = useState<string | null>(null);
 
-  const [addresses, setAddresses] = React.useState<Tables<'direcciones'>[]>([]);
-  const [isLoadingAddresses, setIsLoadingAddresses] = React.useState(true);
-  const [errorAddresses, setErrorAddresses] = React.useState<string | null>(null);
+  const [addresses, setAddresses] = useState<Tables<'direcciones'>[]>([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(true);
+  const [errorAddresses, setErrorAddresses] = useState<string | null>(null);
   
-  const [isAddressDialogOpen, setIsAddressDialogOpen] = React.useState(false);
-  const [editingAddress, setEditingAddress] = React.useState<Tables<'direcciones'> | null>(null);
+  const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<Tables<'direcciones'> | null>(null);
   
-  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = React.useState(false);
-  const [addressToDelete, setAddressToDelete] = React.useState<Tables<'direcciones'> | null>(null);
+  const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<Tables<'direcciones'> | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
       // Opcional: limpiar el parámetro de la URL para que el mensaje no aparezca en recargas
@@ -123,7 +137,7 @@ export default function UserProfilePage() {
     }
   }, [searchParams, router]);
 
-  const fetchUserData = React.useCallback(async () => {
+  const fetchUserData = useCallback(async () => {
     setIsLoading(true);
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
@@ -149,41 +163,47 @@ export default function UserProfilePage() {
     setIsLoading(false);
   }, [supabase, router, toast]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchUserData();
   }, [fetchUserData]);
   
-  const fetchOrders = React.useCallback(async () => {
-    if (!user || !profile) return;
+  const fetchOrders = useCallback(async () => {
+    if (!user || !profile) return; // Asegurar que user y profile estén cargados
     setIsLoadingOrders(true);
     setErrorOrders(null);
     try {
+      console.log("[UserProfilePage] Fetching orders...");
       const userOrders = await getUserOrdersAction();
       setOrders(userOrders);
+      console.log("[UserProfilePage] Orders fetched:", userOrders.length);
     } catch (err: any) {
+      console.error("[UserProfilePage] Error fetching orders:", err);
       setErrorOrders("No se pudieron cargar tus pedidos.");
       toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
       setIsLoadingOrders(false);
     }
-  }, [user, profile, toast]);
+  }, [user, profile, toast]); // Depender de user y profile
 
-  const fetchAddresses = React.useCallback(async () => {
-    if (!profile) return;
+  const fetchAddresses = useCallback(async () => {
+    if (!profile) return; // Asegurar que profile esté cargado
     setIsLoadingAddresses(true);
     setErrorAddresses(null);
     try {
+      console.log("[UserProfilePage] Fetching addresses...");
       const userAddresses = await getUserAddressesAction();
       setAddresses(userAddresses);
+      console.log("[UserProfilePage] Addresses fetched:", userAddresses.length);
     } catch (err: any) {
+      console.error("[UserProfilePage] Error fetching addresses:", err);
       setErrorAddresses("No se pudieron cargar tus direcciones.");
       toast({ title: "Error al Cargar Direcciones", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
       setIsLoadingAddresses(false);
     }
-  }, [profile, toast]);
+  }, [profile, toast]); // Depender de profile
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (user && profile && !isLoading) { 
       fetchOrders();
       fetchAddresses(); 
@@ -197,7 +217,7 @@ export default function UserProfilePage() {
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
     router.refresh(); 
   };
-
+  
   const getOrderStatusBadgeVariant = (status?: Tables<'pedidos'>['estado'] | null): "default" | "secondary" | "destructive" | "outline" => {
     if (!status) return 'outline';
     switch (status) {
@@ -211,7 +231,6 @@ export default function UserProfilePage() {
       case 'Cancelado':
         return 'destructive';
       default:
-        // Esto ayuda a TypeScript a asegurar que todos los casos estén cubiertos
         const _exhaustiveCheck: never = status; 
         return 'outline';
     }
@@ -228,8 +247,7 @@ export default function UserProfilePage() {
   };
   
   const handleAddressSavedOrUpdated = () => {
-    fetchAddresses(); // Recargar direcciones
-    // El cierre del diálogo y limpieza de editingAddress se maneja en onOpenChange del Dialog
+    fetchAddresses(); 
   };
 
   const handleDeleteAddressClick = (address: Tables<'direcciones'>) => {
@@ -242,7 +260,7 @@ export default function UserProfilePage() {
     const result = await deleteUserAddressAction(addressToDelete.id);
     if (result.success) {
       toast({ title: "Dirección Eliminada", description: result.message });
-      fetchAddresses(); // Recargar direcciones
+      fetchAddresses(); 
     } else {
       toast({ title: "Error al Eliminar", description: result.message, variant: "destructive" });
     }
@@ -251,16 +269,10 @@ export default function UserProfilePage() {
   };
 
   if (isLoading) {
-    return (
-      <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Cargando perfil...</p>
-      </main>
-    );
+    return <UserProfileLoading />;
   }
 
   if (!user || !profile) {
-    // La redirección ya ocurre en fetchUserData, pero esto es un fallback.
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
@@ -274,7 +286,7 @@ export default function UserProfilePage() {
       </main>
     );
   }
-
+  
   return (
     <TooltipProvider>
       <main className="container mx-auto px-4 py-8">
@@ -311,7 +323,7 @@ export default function UserProfilePage() {
                     <p><span className="font-medium">Email:</span> {user.email}</p>
                     <p><span className="font-medium">Miembro desde:</span> {new Date(user.created_at).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                   </div>
-                  <Tooltip>
+                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button variant="outline" className="w-full mt-3" disabled>
                         <Edit3 className="mr-2 h-4 w-4" /> Editar Perfil
@@ -407,7 +419,7 @@ export default function UserProfilePage() {
                         </CardHeader>
                         <CardContent className="p-4 space-y-2">
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> MXN${order.total.toFixed(2)}
+                            <span className="font-medium">Total:</span> MXN${typeof order.total === 'number' ? order.total.toFixed(2) : 'N/A'}
                           </p>
                           <p className="text-sm text-muted-foreground italic">
                             <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
@@ -463,6 +475,10 @@ export default function UserProfilePage() {
                         <p className="font-semibold">{address.calle}</p>
                         <p>{address.ciudad}, {address.estado || 'N/A'}, {address.codigo_postal}</p>
                         <p>{address.pais}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {address.nombre_completo_destinatario && <span>Destinatario: {address.nombre_completo_destinatario}<br/></span>}
+                          {address.telefono_contacto && <span>Tel: {address.telefono_contacto}</span>}
+                        </p>
                         <div className="mt-2 flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => handleOpenEditAddressDialog(address)}>
                             <Edit3 className="mr-1 h-3 w-3" /> Editar
@@ -559,13 +575,13 @@ function AddAddressDialog({
     },
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (existingAddress) {
       formMethods.reset({
         nombreCompleto: existingAddress.nombre_completo_destinatario || "",
         direccion: existingAddress.calle || "",
         ciudad: existingAddress.ciudad || "",
-        estado: existingAddress.estado || "",
+        estado: existingAddress.estado || "", // Asegúrate que tu tabla 'direcciones' tenga 'estado'
         codigoPostal: existingAddress.codigo_postal || "",
         pais: existingAddress.pais || "México",
         telefono: existingAddress.telefono_contacto || "",
@@ -581,7 +597,7 @@ function AddAddressDialog({
         telefono: "",
       });
     }
-  }, [existingAddress, formMethods, isOpen]); // Añadir isOpen a las dependencias para resetear cuando se abre para "nuevo"
+  }, [existingAddress, formMethods, isOpen]); 
 
   const handleAddressSubmit = async (data: ShippingFormValues) => {
     setIsSubmittingAddress(true);
@@ -589,8 +605,10 @@ function AddAddressDialog({
     
     let result;
     if (existingAddress?.id) {
+      // Llama a la acción de actualizar si estás editando
       result = await updateUserAddressAction(existingAddress.id, data);
     } else {
+      // Llama a la acción de guardar si es una nueva dirección
       result = await saveShippingAddressAction(data); 
     }
 
@@ -599,8 +617,8 @@ function AddAddressDialog({
         title: existingAddress ? "Dirección Actualizada" : "Dirección Guardada",
         description: result.message || `Tu dirección ha sido ${existingAddress ? 'actualizada' : 'guardada'}.`,
       });
-      onAddressSavedOrUpdated(); // Llama a la función para recargar las direcciones en el padre
-      onOpenChange(false); // Cierra el diálogo
+      onAddressSavedOrUpdated(); 
+      onOpenChange(false); 
     } else {
       toast({
         title: existingAddress ? "Error al Actualizar" : "Error al Guardar",
@@ -742,3 +760,12 @@ function AddAddressDialog({
   );
 }
 
+export default function UserProfilePage() {
+  return (
+    <Suspense fallback={<UserProfileLoading />}>
+      <UserProfileContent />
+    </Suspense>
+  );
+}
+```
+este es el codigo completo de mi user-profile
