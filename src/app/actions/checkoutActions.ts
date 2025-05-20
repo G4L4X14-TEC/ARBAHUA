@@ -4,31 +4,15 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Tables, Database, Json, TablesInsert } from '@/lib/supabase/database.types';
-import * as z from "zod";
+import type { ShippingFormValues } from '@/app/checkout/page'; // Asumiendo que exportas este tipo
+import Stripe from 'stripe';
+import { getCartItemsAction, type CartItemForDisplay } from './cartPageActions'; // Reutilizar para obtener el total
 
-// Esquema Zod para el formulario de envío (consistente con el de la página de checkout)
-const shippingFormSchema = z.object({
-  nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
-  direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
-  ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
-  estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}),
-  codigoPostal: z.string().regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
-  pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
-  telefono: z.string().regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
-});
-type ShippingFormValues = z.infer<typeof shippingFormSchema>;
-
-
-// Helper para crear el cliente de Supabase en Server Actions
-// Esta función es similar a la de cartPageActions.ts y homePageActions.ts
+// Helper para crear el cliente de Supabase en Server Actions (ya existe)
 function createSupabaseServerClientAction() {
   const cookieStore = cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // console.log('[SupabaseServerClientAction - Checkout] Initializing Supabase client.');
-  // console.log(`  NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
-  // console.log(`  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[SupabaseServerClientAction - Checkout] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
@@ -44,10 +28,18 @@ function createSupabaseServerClientAction() {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch (error) {
+            // Silently ignore
+          }
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.delete({ name, ...options });
+          try {
+            cookieStore.delete({ name, ...options });
+          } catch (error) {
+            // Silently ignore
+          }
         },
       },
     }
@@ -70,20 +62,17 @@ export async function saveShippingAddressAction(
   }
   console.log('[saveShippingAddressAction] User ID:', user.id);
 
-  // Normalizar datos para comparación y guardado
   const normalizedAddressData = {
     calle: addressData.direccion.trim(),
     ciudad: addressData.ciudad.trim(),
-    estado: addressData.estado.trim(), // Asegúrate que tu formulario tenga un campo 'estado'
+    estado: addressData.estado.trim(),
     codigo_postal: addressData.codigoPostal.trim(),
     pais: addressData.pais.trim(),
-    // Campos que dependen de que los hayas añadido a tu tabla 'direcciones'
-    // nombre_completo_destinatario: addressData.nombreCompleto.trim(), 
-    // telefono_contacto: addressData.telefono.trim(),
+    // nombre_completo_destinatario: addressData.nombreCompleto.trim(), // Descomentar si añades a la tabla
+    // telefono_contacto: addressData.telefono.trim(), // Descomentar si añades a la tabla
   };
 
   try {
-    // 1. Verificar si ya existe una dirección idéntica para este usuario
     console.log('[saveShippingAddressAction] Checking for existing identical address for user:', user.id);
     const { data: existingAddress, error: selectError } = await supabase
       .from('direcciones')
@@ -91,12 +80,9 @@ export async function saveShippingAddressAction(
       .eq('cliente_id', user.id)
       .eq('calle', normalizedAddressData.calle)
       .eq('ciudad', normalizedAddressData.ciudad)
-      .eq('estado', normalizedAddressData.estado) // Comparar también por estado
+      .eq('estado', normalizedAddressData.estado)
       .eq('codigo_postal', normalizedAddressData.codigo_postal)
       .eq('pais', normalizedAddressData.pais)
-      // Si tienes nombre_completo_destinatario y telefono_contacto en la tabla, añádelos a la comparación:
-      // .eq('nombre_completo_destinatario', normalizedAddressData.nombre_completo_destinatario)
-      // .eq('telefono_contacto', normalizedAddressData.telefono_contacto)
       .maybeSingle();
 
     if (selectError) {
@@ -109,22 +95,12 @@ export async function saveShippingAddressAction(
       return { success: true, addressId: existingAddress.id, message: 'Se utilizará una dirección de envío existente idéntica.' };
     }
 
-    // 2. Si no existe, insertar la nueva dirección
     console.log('[saveShippingAddressAction] No identical address found, inserting new address for user:', user.id);
     const insertPayload: TablesInsert<'direcciones'> = {
       cliente_id: user.id,
-      calle: normalizedAddressData.calle,
-      ciudad: normalizedAddressData.ciudad,
-      estado: normalizedAddressData.estado,
-      codigo_postal: normalizedAddressData.codigo_postal,
-      pais: normalizedAddressData.pais,
-      // Si tienes las columnas en la DB, añade aquí los campos del formulario que faltan:
-      // nombre_completo_destinatario: addressData.nombreCompleto, 
-      // telefono_contacto: addressData.telefono,
+      ...normalizedAddressData,
     };
     
-    console.log('[saveShippingAddressAction] Payload for DB insert:', insertPayload);
-
     const { data: newAddress, error: insertError } = await supabase
       .from('direcciones')
       .insert(insertPayload)
@@ -147,5 +123,65 @@ export async function saveShippingAddressAction(
   } catch (e: any) {
     console.error("[saveShippingAddressAction] Critical error in action:", e.message);
     return { success: false, message: `Error inesperado al guardar la dirección: ${e.message}` };
+  }
+}
+
+
+// Nueva Server Action para crear Payment Intent
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-04-10', // Usa la última versión de la API disponible
+});
+
+export async function createPaymentIntentAction(): Promise<{
+  success: boolean;
+  clientSecret?: string;
+  error?: string;
+  amount?: number;
+}> {
+  console.log('[createPaymentIntentAction] Attempting to create Payment Intent.');
+  const supabase = createSupabaseServerClientAction();
+  if (!supabase) {
+    return { success: false, error: "Error de conexión con el servidor de base de datos." };
+  }
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { success: false, error: "Usuario no autenticado." };
+  }
+
+  const cartItems = await getCartItemsAction(); // Reutilizamos la acción para obtener los items y calcular el total
+  if (cartItems.length === 0) {
+    return { success: false, error: "Tu carrito está vacío." };
+  }
+
+  const totalAmount = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
+  const amountInCents = Math.round(totalAmount * 100); // Stripe requiere el monto en centavos
+
+  if (amountInCents <= 0) {
+     return { success: false, error: "El monto total del carrito debe ser mayor a cero." };
+  }
+  console.log(`[createPaymentIntentAction] Calculated total amount in cents: ${amountInCents}`);
+
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error('[createPaymentIntentAction] CRITICAL: STRIPE_SECRET_KEY no está configurada.');
+    return { success: false, error: 'Error de configuración del servidor de pagos.' };
+  }
+  
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountInCents,
+      currency: 'mxn', // O la moneda que uses
+      automatic_payment_methods: {
+        enabled: true,
+      },
+      // Podrías añadir metadata como el user.id o el cart_id si es útil
+      // metadata: { userId: user.id, cartId: cartItems[0]?.carrito_id },
+    });
+    console.log('[createPaymentIntentAction] Payment Intent created successfully:', paymentIntent.id);
+    return { success: true, clientSecret: paymentIntent.client_secret!, amount: amountInCents };
+  } catch (error: any) {
+    console.error('[createPaymentIntentAction] Error creating Payment Intent:', error.message);
+    return { success: false, error: error.message || 'No se pudo iniciar el proceso de pago.' };
   }
 }
