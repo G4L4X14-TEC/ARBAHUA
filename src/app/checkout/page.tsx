@@ -42,7 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { loadStripe, type Stripe } from '@stripe/stripe-js';
+import { loadStripe, type Stripe as StripeJS } from '@stripe/stripe-js';
 import {
   Elements,
   CardElement,
@@ -62,6 +62,7 @@ const shippingFormSchema = z.object({
 });
 export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
+
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
@@ -69,6 +70,7 @@ const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && typeof window !== 'undefined') {
   console.error("CRITICAL: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY no está definida. Stripe no funcionará.");
 }
+
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -89,14 +91,14 @@ export default function CheckoutPage() {
   const paymentSectionRef = React.useRef<HTMLDivElement>(null); 
   const shippingFormMethods = useForm<ShippingFormValues>({
     resolver: zodResolver(shippingFormSchema),
-    mode: "onChange",
+    mode: "onChange", // Validar onChange para habilitar/deshabilitar botón
     defaultValues: {
       nombreCompleto: "",
       direccion: "",
       ciudad: "",
       estado: "",
       codigoPostal: "",
-      pais: "México",
+      pais: "México", // Valor por defecto
       telefono: "",
     },
   });
@@ -155,6 +157,7 @@ export default function CheckoutPage() {
     }
   }, [isShippingFormValidAndSubmitted]);
 
+
   const calculateTotal = () => {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
@@ -165,10 +168,10 @@ export default function CheckoutPage() {
     try {
       const result = await saveShippingAddressAction(data);
       if (result.success && result.addressId) {
-        setShippingData(data);
+        setShippingData(data); // Guardar datos de envío en estado para pasar a Stripe
         setIsShippingFormValidAndSubmitted(true); 
-        setSavedAddressId(result.addressId);
-        toast({ title: "Información de Envío Guardada", description: "Puedes proceder al pago." });
+        setSavedAddressId(result.addressId); // Guardar el ID de la dirección guardada
+        toast({ title: "Dirección Guardada", description: result.message });
         console.log("[CheckoutPage] Address saved with ID:", result.addressId);
       } else {
         toast({ title: "Error al Guardar Dirección", description: result.message, variant: "destructive" });
@@ -212,9 +215,7 @@ export default function CheckoutPage() {
     );
   }
 
-  if (!isLoadingCart && cartItems.length === 0 && router.pathname === '/checkout') { // Evitar redirect si ya no está en checkout
-    // No redirigir si ya no estamos en la página de checkout (evita bucles si el carrito se vacía por otra acción)
-    // Este chequeo es una salvaguarda, la lógica principal de redirección por carrito vacío está en el useEffect de carga.
+  if (!isLoadingCart && cartItems.length === 0 && typeof window !== 'undefined' && window.location.pathname === '/checkout') {
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -260,8 +261,9 @@ export default function CheckoutPage() {
             {isShippingFormValidAndSubmitted && shippingData && (
               <div ref={paymentSectionRef}> 
                 <PaymentSection 
+                  isShippingComplete={isShippingFormValidAndSubmitted} // Para habilitar el botón de pago
                   shippingValues={shippingData}
-                  totalAmount={calculateTotal()} // Pasar el monto total para el Payment Intent
+                  userEmail={user?.email || 'no-email@example.com'} // Pasar email para Stripe
                 />
               </div>
             )}
@@ -419,6 +421,7 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
                         </FormControl>
                         <SelectContent>
                         <SelectItem value="México">México</SelectItem>
+                        {/* Aquí puedes añadir más países si es necesario */}
                         </SelectContent>
                     </Select>
                     <FormMessage />
@@ -454,12 +457,13 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
 }
 
 interface PaymentSectionProps {
+  isShippingComplete: boolean;
   shippingValues: ShippingFormValues; 
-  totalAmount: number; // Para crear el Payment Intent
+  userEmail: string;
 }
 
-function PaymentSection({ shippingValues, totalAmount }: PaymentSectionProps) {
-  const { toast } = useToast();
+function PaymentSection({ isShippingComplete, shippingValues, userEmail }: PaymentSectionProps) {
+  const { toast } = useToast(); // Asegurar que useToast esté aquí si se usa
 
   if (!stripePromise) {
      console.error("Stripe.js no se ha cargado. Clave publicable podría estar faltando.");
@@ -467,12 +471,12 @@ function PaymentSection({ shippingValues, totalAmount }: PaymentSectionProps) {
       <Card className="shadow-lg mt-8">
         <CardHeader>
           <CardTitle className="text-xl text-destructive flex items-center gap-2">
-             Error de Configuración de Pago
+             <AlertTriangle className="h-5 w-5"/> Error de Configuración de Pago
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p>
-            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada.
+            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada en tus variables de entorno (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
           </p>
         </CardContent>
       </Card>
@@ -491,10 +495,14 @@ function PaymentSection({ shippingValues, totalAmount }: PaymentSectionProps) {
       </CardHeader>
       <CardContent>
           <Elements stripe={stripePromise} options={{
-            // Podrías pasar el clientSecret aquí si ya lo tuvieras
-            // Opciones de apariencia, etc.
+            // Aquí puedes añadir opciones de Elements si las necesitas, como apariencia.
+            // Ver: https://stripe.com/docs/js/elements_object/create_elements#elements_create-options
           }}>
-            <StripePaymentForm shippingValues={shippingValues} />
+            <StripePaymentForm 
+                shippingValues={shippingValues} 
+                isShippingComplete={isShippingComplete}
+                userEmail={userEmail}
+            />
           </Elements>
       </CardContent>
     </Card>
@@ -503,23 +511,24 @@ function PaymentSection({ shippingValues, totalAmount }: PaymentSectionProps) {
 
 interface StripePaymentFormProps {
   shippingValues: ShippingFormValues;
+  isShippingComplete: boolean;
+  userEmail: string;
 }
 
-function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
+function StripePaymentForm({ shippingValues, isShippingComplete, userEmail }: StripePaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
-  const router = useRouter(); // Para redireccionar después del pago
+  const router = useRouter(); 
 
   const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPaymentError(null);
-    setIsLoadingPayment(true);
 
     if (!stripe || !elements) {
-      console.error("Stripe.js no se ha cargado todavía.");
+      console.error("Stripe.js no se ha cargado todavía en StripePaymentForm.");
       setPaymentError("Error al cargar la pasarela de pago. Intenta de nuevo.");
       setIsLoadingPayment(false);
       return;
@@ -527,15 +536,17 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
 
     const cardElement = elements.getElement(CardElement);
     if (!cardElement) {
-      console.error("CardElement no encontrado.");
+      console.error("CardElement no encontrado en StripePaymentForm.");
       setPaymentError("Error con el formulario de tarjeta. Intenta de nuevo.");
       setIsLoadingPayment(false);
       return;
     }
+    
+    setIsLoadingPayment(true);
+    console.log("[StripePaymentForm] Iniciando proceso de pago...");
 
     try {
-      console.log("[StripePaymentForm] Intentando crear Payment Intent...");
-      // 1. Crear Payment Intent llamando a la Server Action
+      console.log("[StripePaymentForm] 1. Creando Payment Intent...");
       const intentResult = await createPaymentIntentAction();
 
       if (!intentResult.success || !intentResult.clientSecret) {
@@ -545,10 +556,9 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
         setIsLoadingPayment(false);
         return;
       }
-      console.log("[StripePaymentForm] Payment Intent creado, clientSecret obtenido.");
+      console.log("[StripePaymentForm] Payment Intent creado, clientSecret:", intentResult.clientSecret.substring(0,15) + "...");
 
-      // 2. Confirmar el pago con la tarjeta
-      console.log("[StripePaymentForm] Confirmando pago con tarjeta...");
+      console.log("[StripePaymentForm] 2. Confirmando pago con tarjeta...");
       const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
         intentResult.clientSecret,
         {
@@ -556,7 +566,7 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
             card: cardElement,
             billing_details: {
               name: shippingValues.nombreCompleto,
-              email: user?.email, // Asume que `user` está disponible en un scope superior o contexto
+              email: userEmail, 
               phone: shippingValues.telefono,
               address: {
                 line1: shippingValues.direccion,
@@ -571,7 +581,7 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
       );
 
       if (stripeError) {
-        console.error("[StripePaymentForm] Error de Stripe al confirmar pago:", stripeError.message);
+        console.error("[StripePaymentForm] Error de Stripe al confirmar pago:", stripeError);
         setPaymentError(stripeError.message || "Ocurrió un error con tu tarjeta.");
         toast({ title: "Error de Pago", description: stripeError.message || "Ocurrió un error con tu tarjeta.", variant: "destructive"});
         setIsLoadingPayment(false);
@@ -583,17 +593,18 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
         toast({
           title: "¡Pago Exitoso!",
           description: "Gracias por tu compra. Tu pedido se está procesando.",
+          duration: 5000,
         });
-        // Aquí, en un futuro:
-        // 1. Guardar la orden en tu base de datos (tablas pedidos, detalle_pedido).
+        // TODO:
+        // 1. Crear la orden en tu base de datos (tablas pedidos, detalle_pedido).
         // 2. Limpiar el carrito del usuario.
         // 3. Redirigir a una página de confirmación de orden o al perfil del usuario.
-        // router.push('/order-confirmation/' + paymentIntent.id); 
-        router.push('/user-profile?order_success=true'); // Ejemplo de redirección
+        router.push('/user-profile?order_success=true'); 
       } else {
         console.warn("[StripePaymentForm] Estado del PaymentIntent no exitoso:", paymentIntent?.status);
-        setPaymentError(`Estado del pago: ${paymentIntent?.status}. Por favor, intenta de nuevo.`);
-        toast({ title: "Estado del Pago Incierto", description: `Estado: ${paymentIntent?.status}`, variant: "destructive"});
+        const errorMessage = paymentIntent?.last_payment_error?.message || `Estado del pago: ${paymentIntent?.status}. Por favor, intenta de nuevo.`;
+        setPaymentError(errorMessage);
+        toast({ title: "Estado del Pago Incierto", description: errorMessage, variant: "destructive"});
       }
 
     } catch (error: any) {
@@ -608,8 +619,8 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
   const cardElementOptions = {
     style: {
       base: {
-        color: "hsl(var(--foreground))", // Usar variable de Tailwind/CSS
-        fontFamily: 'inherit', // Heredar fuente del body
+        color: "hsl(var(--foreground))", 
+        fontFamily: 'inherit',
         fontSize: "16px",
         "::placeholder": {
           color: "hsl(var(--muted-foreground))"
@@ -620,10 +631,9 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
         iconColor: "hsl(var(--destructive))"
       }
     },
-    hidePostalCode: true, // Ocultar si ya lo pides en el formulario de envío
+    hidePostalCode: true, 
   };
 
-  const {user} = useUser(); // Necesitarás un hook para obtener el email del usuario
 
   return (
     <form onSubmit={handleSubmitPayment} className="space-y-4">
@@ -641,23 +651,11 @@ function StripePaymentForm({ shippingValues }: StripePaymentFormProps) {
       <Button 
         type="submit"
         className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
-        disabled={isLoadingPayment || !stripe || !elements} 
+        disabled={isLoadingPayment || !isShippingComplete || !stripe || !elements} 
       >
         {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
         {isLoadingPayment ? 'Procesando Pago...' : 'Finalizar Compra'}
       </Button>
     </form>
   );
-}
-
-// Placeholder hook for user (replace with your actual user context/hook)
-function useUser() {
-  const [user, setUser] = React.useState<{ email?: string } | null>(null);
-  React.useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setUser({ email: data.user.email });
-    });
-  }, []);
-  return { user };
 }

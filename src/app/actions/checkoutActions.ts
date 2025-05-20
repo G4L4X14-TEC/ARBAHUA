@@ -6,13 +6,18 @@ import { cookies } from 'next/headers';
 import type { Tables, Database, Json, TablesInsert } from '@/lib/supabase/database.types';
 import type { ShippingFormValues } from '@/app/checkout/page'; // Asumiendo que exportas este tipo
 import Stripe from 'stripe';
-import { getCartItemsAction, type CartItemForDisplay } from './cartPageActions'; // Reutilizar para obtener el total
+import { getCartItemsAction, type CartItemForDisplay } from './cartPageActions';
 
-// Helper para crear el cliente de Supabase en Server Actions (ya existe)
+// Helper para crear el cliente de Supabase en Server Actions
 function createSupabaseServerClientAction() {
   const cookieStore = cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // console.log('[SupabaseServerClientAction - Checkout] Initializing Supabase client.');
+  // console.log(`  NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
+  // console.log(`  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
+
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[SupabaseServerClientAction - Checkout] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
@@ -62,14 +67,18 @@ export async function saveShippingAddressAction(
   }
   console.log('[saveShippingAddressAction] User ID:', user.id);
 
+  // Normalizar los datos de la dirección para que coincidan con las columnas de la BD
+  // Asumiendo que tu tabla 'direcciones' tiene estas columnas:
   const normalizedAddressData = {
-    calle: addressData.direccion.trim(),
+    calle: addressData.direccion.trim(), // 'direccion' del formulario a 'calle' en BD
     ciudad: addressData.ciudad.trim(),
     estado: addressData.estado.trim(),
-    codigo_postal: addressData.codigoPostal.trim(),
+    codigo_postal: addressData.codigoPostal.trim(), // 'codigoPostal' a 'codigo_postal'
     pais: addressData.pais.trim(),
-    // nombre_completo_destinatario: addressData.nombreCompleto.trim(), // Descomentar si añades a la tabla
-    // telefono_contacto: addressData.telefono.trim(), // Descomentar si añades a la tabla
+    // Los campos nombreCompleto y telefono no están en el esquema original de 'direcciones'.
+    // Si los añadiste, descomenta y ajusta los nombres de columna aquí.
+    // nombre_completo_destinatario: addressData.nombreCompleto.trim(),
+    // telefono_contacto: addressData.telefono.trim(),
   };
 
   try {
@@ -136,7 +145,7 @@ export async function createPaymentIntentAction(): Promise<{
   success: boolean;
   clientSecret?: string;
   error?: string;
-  amount?: number;
+  amount?: number; // Opcional: devolver el monto para confirmación en frontend
 }> {
   console.log('[createPaymentIntentAction] Attempting to create Payment Intent.');
   const supabase = createSupabaseServerClientAction();
@@ -144,20 +153,23 @@ export async function createPaymentIntentAction(): Promise<{
     return { success: false, error: "Error de conexión con el servidor de base de datos." };
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  const { data: { user }, error: userAuthError } = await supabase.auth.getUser();
+  if (userAuthError || !user) {
+    console.error('[createPaymentIntentAction] User not authenticated.');
     return { success: false, error: "Usuario no autenticado." };
   }
 
   const cartItems = await getCartItemsAction(); // Reutilizamos la acción para obtener los items y calcular el total
-  if (cartItems.length === 0) {
-    return { success: false, error: "Tu carrito está vacío." };
+  if (!cartItems || cartItems.length === 0) { // Verificación adicional por si getCartItemsAction devuelve null o []
+    console.log('[createPaymentIntentAction] Cart is empty or could not be fetched.');
+    return { success: false, error: "Tu carrito está vacío o no se pudo cargar." };
   }
 
   const totalAmount = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
   const amountInCents = Math.round(totalAmount * 100); // Stripe requiere el monto en centavos
 
-  if (amountInCents <= 0) {
+  if (amountInCents <= 0) { // Stripe no permite montos de 0 o negativos para Payment Intents estándar.
+     console.log(`[createPaymentIntentAction] Invalid total amount: ${totalAmount}`);
      return { success: false, error: "El monto total del carrito debe ser mayor a cero." };
   }
   console.log(`[createPaymentIntentAction] Calculated total amount in cents: ${amountInCents}`);
@@ -176,7 +188,7 @@ export async function createPaymentIntentAction(): Promise<{
         enabled: true,
       },
       // Podrías añadir metadata como el user.id o el cart_id si es útil
-      // metadata: { userId: user.id, cartId: cartItems[0]?.carrito_id },
+      metadata: { userId: user.id, /* cartId: cartItems[0]?.carrito_id */ }, // carrito_id puede no estar en CartItemForDisplay
     });
     console.log('[createPaymentIntentAction] Payment Intent created successfully:', paymentIntent.id);
     return { success: true, clientSecret: paymentIntent.client_secret!, amount: amountInCents };
