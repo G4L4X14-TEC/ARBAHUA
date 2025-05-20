@@ -32,6 +32,7 @@ import {
   FormField,
   FormItem,
   FormMessage,
+  FormLabel, // Añadido FormLabel que faltaba
 } from "@/components/ui/form";
 import {
   Select,
@@ -93,7 +94,7 @@ export default function CheckoutPage() {
       nombreCompleto: "",
       direccion: "",
       ciudad: "",
-      estado: "", // Añadido para consistencia con el schema
+      estado: "", 
       codigoPostal: "",
       pais: "México", 
       telefono: "",
@@ -272,9 +273,9 @@ export default function CheckoutPage() {
                   isShippingComplete={isShippingFormValidAndSubmitted}
                   shippingValues={shippingData}
                   userEmail={user?.email || 'no-email@example.com'}
-                  cartItems={cartItems}
-                  savedAddressId={savedAddressId}
-                  totalAmountInCents={Math.round(calculateTotal() * 100)}
+                  cartItems={cartItems} // Pasar cartItems
+                  savedAddressId={savedAddressId} // Pasar savedAddressId
+                  totalAmountInCents={Math.round(calculateTotal() * 100)} // Pasar el monto total
                 />
               </div>
             )}
@@ -390,7 +391,7 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
                   </FormItem>
                 )}
               />
-              <FormField
+               <FormField
                 control={form.control}
                 name="estado"
                 render={({ field }) => (
@@ -470,9 +471,9 @@ interface PaymentSectionProps {
   isShippingComplete: boolean;
   shippingValues: ShippingFormValues; 
   userEmail: string;
-  cartItems: CartItemForDisplay[]; // Añadido para pasarlo a createOrderAction
-  savedAddressId: string; // Añadido para pasarlo a createOrderAction
-  totalAmountInCents: number; // Añadido para pasarlo a createOrderAction
+  cartItems: CartItemForDisplay[]; 
+  savedAddressId: string; 
+  totalAmountInCents: number;
 }
 
 function PaymentSection({ 
@@ -483,8 +484,7 @@ function PaymentSection({
   savedAddressId,
   totalAmountInCents
 }: PaymentSectionProps) {
-  const { toast } = useToast();
-  const shippingFormContext = useFormContext<ShippingFormValues>(); 
+  const { toast } = useToast(); // Obtenemos toast aquí si se usa en StripePaymentForm
 
   if (!stripePromise) {
      console.error("Stripe.js no se ha cargado. Clave publicable podría estar faltando.");
@@ -497,7 +497,7 @@ function PaymentSection({
         </CardHeader>
         <CardContent>
           <p>
-            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada.
+            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada en tus variables de entorno (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
           </p>
         </CardContent>
       </Card>
@@ -518,7 +518,7 @@ function PaymentSection({
           <Elements stripe={stripePromise}>
             <StripePaymentForm 
                 shippingValues={shippingValues} 
-                isShippingComplete={isShippingComplete && (shippingFormContext?.formState?.isValid ?? false)}
+                isShippingComplete={isShippingComplete}
                 userEmail={userEmail}
                 cartItems={cartItems}
                 savedAddressId={savedAddressId}
@@ -553,12 +553,13 @@ function StripePaymentForm({
   const router = useRouter();
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
+  const shippingFormContext = useFormContext<ShippingFormValues>(); // Para acceder al estado del formulario de envío
 
   const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPaymentError(null);
 
-    if (!isShippingComplete) {
+    if (!isShippingComplete || !shippingFormContext.formState.isValid) { // Doble verificación
       toast({ title: "Información Incompleta", description: "Completa y guarda tu dirección de envío antes de pagar.", variant: "destructive" });
       return;
     }
@@ -599,7 +600,7 @@ function StripePaymentForm({
         intentResult.clientSecret,
         {
           payment_method: {
-            card: cardElement as StripeCardElement, // Type assertion
+            card: cardElement as StripeCardElement,
             billing_details: {
               name: shippingValues.nombreCompleto,
               email: userEmail, 
@@ -627,13 +628,12 @@ function StripePaymentForm({
       if (paymentIntent?.status === 'succeeded') {
         console.log("[StripePaymentForm] ¡Pago exitoso! PaymentIntent ID:", paymentIntent.id, "Monto:", paymentIntent.amount);
         
-        // 3. Crear la orden en la base de datos
         console.log("[StripePaymentForm] 3. Creando orden en la base de datos...");
         const orderResult = await createOrderAction(
           cartItems, 
           savedAddressId, 
           paymentIntent.id, 
-          paymentIntent.amount // Stripe devuelve el monto en centavos
+          paymentIntent.amount 
         );
 
         if (orderResult.success && orderResult.orderId) {
@@ -643,12 +643,11 @@ function StripePaymentForm({
             duration: 7000,
           });
           // TODO: Limpiar el carrito del usuario.
-          // TODO: Redirigir a una página de confirmación de orden o al perfil del usuario.
-          router.push('/user-profile?order_success=true'); 
+          // TODO: Redirigir a una página de confirmación de orden.
+          // router.push(`/order-confirmation/${orderResult.orderId}`); 
+          router.push('/user-profile?order_success=true'); // Redirigir al perfil por ahora
         } else {
           console.error("[StripePaymentForm] Error creando orden en la base de datos:", orderResult.message);
-          // El pago fue exitoso, pero la creación de la orden falló. Esto es un estado problemático.
-          // Se debería notificar al usuario y posiblemente al administrador.
           setPaymentError(`El pago fue exitoso, pero hubo un problema al registrar tu orden: ${orderResult.message}. Por favor, contacta a soporte.`);
           toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado, pero no pudimos registrar tu orden. Por favor, contacta a soporte con el ID de transacción: ${paymentIntent.id}`, variant: "destructive", duration: 10000 });
         }
@@ -710,4 +709,5 @@ function StripePaymentForm({
     </form>
   );
 }
-
+```
+Ya arreglaste el error que no generaba, tambien ya esta funcional ahora que sigue
