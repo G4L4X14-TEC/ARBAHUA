@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -21,7 +20,7 @@ async function createSupabaseServerClientAction() {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[SupabaseServerClientAction - UserProfile] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
-    return null; // CORRECCIÓN: Añadido return null
+    return null; 
   }
 
   return createServerClient<Database>(
@@ -61,13 +60,12 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
   try {
     const { data: ordersData, error: ordersError } = await supabase
       .from('pedidos')
-      .select('id, total, estado, fecha_pedido, detalle_pedido(cantidad, precio, productos(nombre))') // CORRECCIÓN: Cadena de select simplificada
+      .select('id, total, estado, fecha_pedido, detalle_pedido(cantidad, precio, productos(nombre))')
       .eq('cliente_id', user.id)
       .order('fecha_pedido', { ascending: false });
 
     if (ordersError) {
       console.error('[getUserOrdersAction] Error fetching orders:', ordersError.message);
-      // No relanzar el error aquí directamente, mejor devolver array vacío y loguear.
       return []; 
     }
 
@@ -80,11 +78,9 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
 
     const displayedOrders: UserOrderForDisplay[] = ordersData.map(order => {
       let itemsSummary = 'Múltiples productos';
-      // Asegurar que detalle_pedido es un array antes de intentar acceder a sus elementos
       const detalleArray = Array.isArray(order.detalle_pedido) ? order.detalle_pedido : [];
 
       if (detalleArray.length > 0) {
-        // Tipar explícitamente firstDetailItem para mejorar la seguridad y claridad
         const firstDetailItem = detalleArray[0] as unknown as { productos: { nombre: string } | null, cantidad: number }; 
         if (firstDetailItem && firstDetailItem.productos) {
           itemsSummary = `${firstDetailItem.productos.nombre}${detalleArray.length > 1 ? ' y más...' : ''}`;
@@ -150,7 +146,7 @@ export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]>
     return addressesData;
 
   } catch (e: any) {
-    console.error("[getUserAddressesAction] Critical error in action:", e.message); // CORRECCIÓN: Log completo
+    console.error("[getUserAddressesAction] Critical error in action:", e.message);
     return [];
   }
 }
@@ -172,17 +168,15 @@ export async function updateUserAddressAction(
   }
 
   // Mapeo de ShippingFormValues a TablesUpdate<'direcciones'>
-  // Asegúrate de que los nombres de campo coincidan con tu tabla 'direcciones'
-  // y que ShippingFormValues se importe correctamente.
   const updatePayload: TablesUpdate<'direcciones'> = {
     calle: addressData.direccion,
     ciudad: addressData.ciudad,
-    estado: addressData.estado, // Asegúrate que 'estado' exista en ShippingFormValues y tabla direcciones
+    estado: addressData.estado, 
     codigo_postal: addressData.codigoPostal,
     pais: addressData.pais,
-    // Si tienes estos campos en tu tabla 'direcciones' y en ShippingFormValues:
-    // nombre_completo_destinatario: addressData.nombreCompleto, 
-    // telefono_contacto: addressData.telefono, 
+    // Asumiendo que tu tabla `direcciones` tiene estas columnas y tu `ShippingFormValues` también
+    nombre_completo_destinatario: addressData.nombreCompleto, 
+    telefono_contacto: addressData.telefono, 
   };
 
   try {
@@ -236,7 +230,4 @@ export async function deleteUserAddressAction(
     return { success: true, message: 'Dirección eliminada correctamente.' };
   } catch (e: any) {
     console.error("[deleteUserAddressAction] Critical error:", e.message);
-    return { success: false, message: `Error inesperado al eliminar la dirección: ${e.message}` }; // CORRECCIÓN: Template literal cerrado
-  }
-}
-    
+    return { success: false, message: `Error

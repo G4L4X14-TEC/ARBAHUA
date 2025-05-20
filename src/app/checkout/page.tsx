@@ -709,6 +709,3 @@ function StripePaymentForm({
     </form>
   );
 }
-
-```
-ESTE ES EL CODIGO EN `src/app/checkout/page.tsx` donde tengo el error de cannot find `FormProvider` en las lineas 629 y 630

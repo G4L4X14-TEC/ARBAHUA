@@ -17,7 +17,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input"; 
 import { Label } from "@/components/ui/label"; 
-import { Textarea } from "@/components/ui/textarea"; 
+// Textarea no se usa directamente aquí, pero podría ser útil para un futuro "editar perfil"
+// import { Textarea } from "@/components/ui/textarea"; 
 import { 
   Form, 
   FormControl, 
@@ -82,8 +83,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { 
   getUserOrdersAction, 
   getUserAddressesAction,
-  updateUserAddressAction,
-  deleteUserAddressAction,
+  updateUserAddressAction, // Importar la nueva acción
+  deleteUserAddressAction,  // Importar la nueva acción
   type UserOrderForDisplay 
 } from "@/app/actions/userProfileActions";
 import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
@@ -124,7 +125,7 @@ function UserProfileContent() {
   const [errorAddresses, setErrorAddresses] = useState<string | null>(null);
   
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<Tables<'direcciones'> | null>(null);
+  const [editingAddress, setEditingAddress] = useState<Tables<'direcciones'> | null>(null); // Para edición
   
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [addressToDelete, setAddressToDelete] = useState<Tables<'direcciones'> | null>(null);
@@ -132,7 +133,7 @@ function UserProfileContent() {
   useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL para que el mensaje no aparezca en recargas
+      // Opcional: limpiar el parámetro de la URL
       // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
@@ -168,61 +169,55 @@ function UserProfileContent() {
   }, [fetchUserData]);
   
   const fetchOrders = useCallback(async () => {
-    if (!user || !profile) return; // Asegurar que user y profile estén cargados
+    if (!profile) return;
     setIsLoadingOrders(true);
     setErrorOrders(null);
     try {
-      console.log("[UserProfilePage] Fetching orders...");
       const userOrders = await getUserOrdersAction();
       setOrders(userOrders);
-      console.log("[UserProfilePage] Orders fetched:", userOrders.length);
     } catch (err: any) {
-      console.error("[UserProfilePage] Error fetching orders:", err);
       setErrorOrders("No se pudieron cargar tus pedidos.");
       toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
       setIsLoadingOrders(false);
     }
-  }, [user, profile, toast]); // Depender de user y profile
+  }, [profile, toast]);
 
   const fetchAddresses = useCallback(async () => {
-    if (!profile) return; // Asegurar que profile esté cargado
+    if (!profile) return;
     setIsLoadingAddresses(true);
     setErrorAddresses(null);
     try {
-      console.log("[UserProfilePage] Fetching addresses...");
       const userAddresses = await getUserAddressesAction();
       setAddresses(userAddresses);
-      console.log("[UserProfilePage] Addresses fetched:", userAddresses.length);
     } catch (err: any) {
-      console.error("[UserProfilePage] Error fetching addresses:", err);
       setErrorAddresses("No se pudieron cargar tus direcciones.");
       toast({ title: "Error al Cargar Direcciones", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
       setIsLoadingAddresses(false);
     }
-  }, [profile, toast]); // Depender de profile
+  }, [profile, toast]);
 
   useEffect(() => {
-    if (user && profile && !isLoading) { 
+    if (profile && !isLoading) { 
       fetchOrders();
       fetchAddresses(); 
     }
-  }, [user, profile, isLoading, fetchOrders, fetchAddresses]); 
+  }, [profile, isLoading, fetchOrders, fetchAddresses]); 
 
   const handleSignOut = async () => {
-    setIsLoading(true); 
     await supabase.auth.signOut();
     router.push('/');
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
-    router.refresh(); 
+    router.refresh();
   };
   
   const getOrderStatusBadgeVariant = (status?: Tables<'pedidos'>['estado'] | null): "default" | "secondary" | "destructive" | "outline" => {
     if (!status) return 'outline';
+    // Asegúrate que 'Pagado' esté en tu tipo ENUM estado_pedido_type en database.types.ts
     switch (status) {
       case 'Pagado':
-        return 'default'; 
+        return 'default'; // O un color 'success' si lo tienes
       case 'Enviado':
       case 'Entregado':
         return 'default'; 
@@ -237,7 +232,7 @@ function UserProfileContent() {
   };
 
   const handleOpenAddAddressDialog = () => {
-    setEditingAddress(null);
+    setEditingAddress(null); // Asegurarse que no haya una dirección en edición
     setIsAddressDialogOpen(true);
   };
 
@@ -269,7 +264,7 @@ function UserProfileContent() {
   };
 
   if (isLoading) {
-    return <UserProfileLoading />;
+    return <UserProfileLoading />; // Ya está definido arriba
   }
 
   if (!user || !profile) {
@@ -407,7 +402,7 @@ function UserProfileContent() {
                         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-muted/30 gap-2">
                           <div>
                             <p className="text-sm font-medium text-foreground">
-                              Pedido <span className="text-primary">#${order.id.substring(0, 8).toUpperCase()}</span>
+                              Pedido <span className="text-primary">#{(order.id || 'N/A').substring(0, 8).toUpperCase()}</span>
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {order.formatted_date}
@@ -451,7 +446,7 @@ function UserProfileContent() {
                   Mis Direcciones
                 </CardTitle>
                 <Button size="sm" onClick={handleOpenAddAddressDialog}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Nueva Dirección
+                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Nueva
                 </Button>
               </CardHeader>
               <CardContent>
@@ -475,11 +470,13 @@ function UserProfileContent() {
                         <p className="font-semibold">{address.calle}</p>
                         <p>{address.ciudad}, {address.estado || 'N/A'}, {address.codigo_postal}</p>
                         <p>{address.pais}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {address.nombre_completo_destinatario && <span>Destinatario: {address.nombre_completo_destinatario}<br/></span>}
-                          {address.telefono_contacto && <span>Tel: {address.telefono_contacto}</span>}
-                        </p>
-                        <div className="mt-2 flex gap-2">
+                        {(address.nombre_completo_destinatario || address.telefono_contacto) && (
+                            <div className="text-xs text-muted-foreground mt-1 pt-1 border-t">
+                                {address.nombre_completo_destinatario && <p>Destinatario: {address.nombre_completo_destinatario}</p>}
+                                {address.telefono_contacto && <p>Tel: {address.telefono_contacto}</p>}
+                            </div>
+                        )}
+                        <div className="mt-3 flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => handleOpenEditAddressDialog(address)}>
                             <Edit3 className="mr-1 h-3 w-3" /> Editar
                           </Button>
@@ -493,6 +490,7 @@ function UserProfileContent() {
                 )}
               </CardContent>
             </Card>
+            
             <Card className="shadow-xl">
               <CardHeader>
                 <CardTitle className="text-xl text-earthy-green flex items-center gap-2"><Settings className="h-5 w-5" />Preferencias de la Cuenta</CardTitle>
@@ -546,6 +544,7 @@ function UserProfileContent() {
   );
 }
 
+
 interface AddAddressDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
@@ -577,16 +576,18 @@ function AddAddressDialog({
 
   useEffect(() => {
     if (existingAddress) {
+      console.log("[AddAddressDialog] Editing existing address:", existingAddress);
       formMethods.reset({
         nombreCompleto: existingAddress.nombre_completo_destinatario || "",
         direccion: existingAddress.calle || "",
         ciudad: existingAddress.ciudad || "",
-        estado: existingAddress.estado || "", // Asegúrate que tu tabla 'direcciones' tenga 'estado'
+        estado: existingAddress.estado || "",
         codigoPostal: existingAddress.codigo_postal || "",
         pais: existingAddress.pais || "México",
         telefono: existingAddress.telefono_contacto || "",
       });
     } else {
+      console.log("[AddAddressDialog] Adding new address, resetting form.");
       formMethods.reset({
         nombreCompleto: "",
         direccion: "",
@@ -597,7 +598,7 @@ function AddAddressDialog({
         telefono: "",
       });
     }
-  }, [existingAddress, formMethods, isOpen]); 
+  }, [existingAddress, formMethods, isOpen]); // Depender de isOpen para resetear si se cierra y reabre para "Añadir"
 
   const handleAddressSubmit = async (data: ShippingFormValues) => {
     setIsSubmittingAddress(true);
@@ -605,10 +606,8 @@ function AddAddressDialog({
     
     let result;
     if (existingAddress?.id) {
-      // Llama a la acción de actualizar si estás editando
       result = await updateUserAddressAction(existingAddress.id, data);
     } else {
-      // Llama a la acción de guardar si es una nueva dirección
       result = await saveShippingAddressAction(data); 
     }
 
@@ -702,7 +701,11 @@ function AddAddressDialog({
                         <FormItem>
                         <FormLabel>Código Postal</FormLabel>
                         <FormControl>
-                            <Input placeholder="01234" {...field} />
+                            <Input 
+                              type="text" 
+                              placeholder="01234" 
+                              {...field} 
+                            />
                         </FormControl>
                         <FormMessage />
                         </FormItem>
@@ -722,6 +725,7 @@ function AddAddressDialog({
                             </FormControl>
                             <SelectContent>
                             <SelectItem value="México">México</SelectItem>
+                            {/* Puedes añadir más países aquí */}
                             </SelectContent>
                         </Select>
                         <FormMessage />
@@ -736,7 +740,11 @@ function AddAddressDialog({
                 <FormItem>
                   <FormLabel>Teléfono de Contacto (10 dígitos)</FormLabel>
                   <FormControl>
-                    <Input type="tel" placeholder="5512345678" {...field} />
+                    <Input 
+                      type="tel" 
+                      placeholder="5512345678" 
+                      {...field} 
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -767,3 +775,5 @@ export default function UserProfilePage() {
     </Suspense>
   );
 }
+
+```revisalo y genera tus cambios
