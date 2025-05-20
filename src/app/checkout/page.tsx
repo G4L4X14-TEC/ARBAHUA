@@ -29,7 +29,7 @@ import {
   AlertTriangle 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getCartItemsAction, type CartItemForDisplay, clearCartAction } from "@/app/actions/cartPageActions";
+import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
 import { saveShippingAddressAction, createPaymentIntentAction, createOrderAction } from "@/app/actions/checkoutActions"; 
 import { 
   useForm, 
@@ -63,15 +63,18 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 
-// Exportar el esquema y el tipo para reutilización
 export const shippingFormSchema = z.object({
   nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
-  direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }), // Corresponde a 'calle'
+  direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
   estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}),
-  codigoPostal: z.string().regex(/^d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
+  codigoPostal: z.string()
+    .transform(val => val.trim()) // Eliminar espacios al inicio y al final
+    .regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
   pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
-  telefono: z.string().regex(/^d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
+  telefono: z.string()
+    .transform(val => val.trim()) // Eliminar espacios al inicio y al final
+    .regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
 });
 export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
@@ -177,7 +180,7 @@ export default function CheckoutPage() {
   };
 
   const handleShippingSubmitSuccess = async (data: ShippingFormValues) => {
-    console.log("[CheckoutPage] Shipping Data Submitted:", data);
+    console.log("[CheckoutPage] Shipping Data Submitted for saving:", data);
     setIsSavingAddress(true);
     try {
       const result = await saveShippingAddressAction(data);
@@ -239,6 +242,7 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0 && typeof window !== 'undefined' && window.location.pathname === '/checkout') {
+    // Este chequeo debería ocurrir antes en useEffect, pero como fallback
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -278,7 +282,7 @@ export default function CheckoutPage() {
           <section className="lg:col-span-2 space-y-8">
             <ShippingForm 
               onSubmitSuccess={handleShippingSubmitSuccess}
-              isSubmittingParent={isSavingAddress} 
+              isSubmittingParent={isSavingAddress || shippingFormMethods.formState.isSubmitting} 
             />
             
             {isShippingFormValidAndSubmitted && shippingData && savedAddressId && cartItems.length > 0 && (
@@ -330,13 +334,13 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
                 <p className="text-xs text-muted-foreground">Cantidad: {item.cantidad}</p>
               </div>
             </div>
-            <p className="font-medium text-foreground">MXN${item.subtotal.toFixed(2)}</p>
+            <p className="font-medium text-foreground">MXN\${item.subtotal.toFixed(2)}</p>
           </div>
         ))}
         <Separator />
         <div className="flex justify-between font-semibold text-lg">
           <span>Total:</span>
-          <span>MXN${total.toFixed(2)}</span>
+          <span>MXN\${total.toFixed(2)}</span>
         </div>
       </CardContent>
     </Card>
@@ -344,138 +348,137 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
 }
 
 interface ShippingFormProps {
-  onSubmitSuccess: (data: ShippingFormValues) => void; // Cambiado para no ser async aquí
+  onSubmitSuccess: (data: ShippingFormValues) => void;
   isSubmittingParent: boolean; 
 }
 
 function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps) {
-  const form = useFormContext<ShippingFormValues>(); // Obtiene métodos del FormProvider
+  const form = useFormContext<ShippingFormValues>(); 
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
-         <HomeIcon className="h-5 w-5" /> Información de Envío
-        </CardTitle>
-        <CardDescription>Ingresa los detalles para la entrega de tu pedido.</CardDescription>
-      </CardHeader>
-      <CardContent>
-          {/* El <Form> de react-hook-form ya no es necesario aquí porque estamos dentro de FormProvider */}
-          <form onSubmit={form.handleSubmit(onSubmitSuccess)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="nombreCompleto"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre Completo</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Juan Pérez Rodríguez" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="direccion" // Este campo se mapeará a 'calle' en la tabla 'direcciones'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Dirección (Calle y Número, Colonia, Referencias)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Av. Siempre Viva 742, Col. Springfield" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <Card className="shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
+          <HomeIcon className="h-5 w-5" /> Información de Envío
+          </CardTitle>
+          <CardDescription>Ingresa los detalles para la entrega de tu pedido.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <form onSubmit={form.handleSubmit(onSubmitSuccess)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="ciudad"
+                name="nombreCompleto"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Ciudad</FormLabel>
+                    <FormLabel>Nombre Completo</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ciudad de México" {...field} />
+                      <Input placeholder="Juan Pérez Rodríguez" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-               <FormField
+              <FormField
                 control={form.control}
-                name="estado"
+                name="direccion"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estado</FormLabel>
+                    <FormLabel>Dirección (Calle y Número, Colonia, Referencias)</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ej: Jalisco" {...field} />
+                      <Input placeholder="Av. Siempre Viva 742, Col. Springfield" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
-                control={form.control}
-                name="codigoPostal"
-                render={({ field }) => (
+                  control={form.control}
+                  name="ciudad"
+                  render={({ field }) => (
                     <FormItem>
-                    <FormLabel>Código Postal</FormLabel>
+                      <FormLabel>Ciudad</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ciudad de México" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="estado"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estado</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ej: Jalisco" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                  control={form.control}
+                  name="codigoPostal"
+                  render={({ field }) => (
+                      <FormItem>
+                      <FormLabel>Código Postal</FormLabel>
+                      <FormControl>
+                          <Input placeholder="01234" {...field} type="text" />
+                      </FormControl>
+                      <FormMessage />
+                      </FormItem>
+                  )}
+                  />
+                  <FormField
+                  control={form.control}
+                  name="pais"
+                  render={({ field }) => (
+                      <FormItem>
+                      <FormLabel>País</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                          <SelectTrigger>
+                              <SelectValue placeholder="Selecciona un país" />
+                          </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                          <SelectItem value="México">México</SelectItem>
+                          {/* Puedes añadir más países aquí */}
+                          </SelectContent>
+                      </Select>
+                      <FormMessage />
+                      </FormItem>
+                  )}
+                  />
+              </div>
+              <FormField
+                control={form.control}
+                name="telefono"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Teléfono de Contacto (10 dígitos)</FormLabel>
                     <FormControl>
-                        <Input placeholder="01234" {...field} />
+                      <Input type="tel" placeholder="5512345678" {...field} />
                     </FormControl>
                     <FormMessage />
-                    </FormItem>
+                  </FormItem>
                 )}
-                />
-                <FormField
-                control={form.control}
-                name="pais"
-                render={({ field }) => (
-                    <FormItem>
-                    <FormLabel>País</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Selecciona un país" />
-                        </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                        <SelectItem value="México">México</SelectItem>
-                        {/* Puedes añadir más países aquí */}
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                    </FormItem>
-                )}
-                />
-            </div>
-            <FormField
-              control={form.control}
-              name="telefono"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Teléfono de Contacto (10 dígitos)</FormLabel>
-                  <FormControl>
-                    <Input type="tel" placeholder="5512345678" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <Button 
-              type="submit" 
-              className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={!form.formState.isValid || form.formState.isSubmitting || isSubmittingParent }
-            >
-              {form.formState.isSubmitting || isSubmittingParent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Guardar Dirección y Continuar al Pago
-            </Button>
-          </form>
-      </CardContent>
-    </Card>
+              />
+              <Button 
+                type="submit" 
+                className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground"
+                disabled={!form.formState.isValid || form.formState.isSubmitting || isSubmittingParent }
+              >
+                {form.formState.isSubmitting || isSubmittingParent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Guardar Dirección y Continuar al Pago
+              </Button>
+            </form>
+        </CardContent>
+      </Card>
   );
 }
 
@@ -496,11 +499,9 @@ function PaymentSection({
   savedAddressId,
   totalAmountInCents
 }: PaymentSectionProps) {
-  const { toast } = useToast(); 
-  console.log("[PaymentSection] Shipping form is valid:", useFormContext<ShippingFormValues>().formState.isValid);
-
-
-  if (!stripePromise && typeof window !== 'undefined') {
+  const { toast: pageToast } = useToast(); // Renombrar para evitar conflicto si StripePaymentForm usa su propio toast
+  
+  if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && typeof window !== 'undefined') {
      console.error("Stripe.js no se ha cargado. Clave publicable podría estar faltando.");
      return (
       <Card className="shadow-lg mt-8">
@@ -511,7 +512,7 @@ function PaymentSection({
         </CardHeader>
         <CardContent>
           <p>
-            No se pudo cargar la pasarela de pago. Por favor, verifica que la clave publicable de Stripe esté correctamente configurada.
+            No se pudo cargar la pasarela de pago. Por favor, contacta a soporte.
           </p>
         </CardContent>
       </Card>
@@ -572,21 +573,18 @@ function StripePaymentForm({
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
   
-  // Acceder al contexto del formulario de envío si es necesario, por ejemplo, para doble validación
   const shippingFormContext = useFormContext<ShippingFormValues>();
 
   const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPaymentError(null);
-    console.log("[StripePaymentForm] handleSubmitPayment triggered. isShippingComplete:", isShippingComplete, "shippingFormIsValid:", shippingFormContext.formState.isValid);
 
-    if (!isShippingComplete || !shippingFormContext.formState.isValid) { 
+    if (!isShippingComplete || (shippingFormContext && !shippingFormContext.formState.isValid)) { 
       toast({ title: "Información Incompleta", description: "Completa y guarda tu dirección de envío antes de pagar.", variant: "destructive" });
       return;
     }
 
     if (!stripe || !elements) {
-      console.error("Stripe.js no se ha cargado todavía en StripePaymentForm.");
       setPaymentError("Error al cargar la pasarela de pago. Intenta de nuevo.");
       setIsLoadingPayment(false);
       return;
@@ -594,7 +592,6 @@ function StripePaymentForm({
 
     const cardElement = elements.getElement(CardElement);
     if (!cardElement) {
-      console.error("CardElement no encontrado en StripePaymentForm.");
       setPaymentError("Error con el formulario de tarjeta. Intenta de nuevo.");
       setIsLoadingPayment(false);
       return;
@@ -604,30 +601,27 @@ function StripePaymentForm({
     console.log("[StripePaymentForm] Iniciando proceso de pago...");
 
     try {
-      console.log("[StripePaymentForm] 1. Creando Payment Intent...");
       const intentResult = await createPaymentIntentAction();
 
       if (!intentResult.success || !intentResult.clientSecret) {
-        console.error("[StripePaymentForm] Error creando Payment Intent:", intentResult.error);
         setPaymentError(intentResult.error || "No se pudo iniciar el proceso de pago.");
         toast({ title: "Error de Pago", description: intentResult.error || "No se pudo iniciar el proceso de pago.", variant: "destructive" });
         setIsLoadingPayment(false);
         return;
       }
-      console.log("[StripePaymentForm] Payment Intent creado. Client Secret:", intentResult.clientSecret.substring(0,15) + "...");
+      console.log("[StripePaymentForm] Payment Intent creado.");
 
-      console.log("[StripePaymentForm] 2. Confirmando pago con tarjeta...");
       const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
         intentResult.clientSecret,
         {
           payment_method: {
-            card: cardElement as StripeCardElement, // Asegurar tipo
+            card: cardElement,
             billing_details: {
               name: shippingValues.nombreCompleto,
               email: userEmail, 
               phone: shippingValues.telefono,
               address: {
-                line1: shippingValues.direccion, // Mapea a 'calle'
+                line1: shippingValues.direccion,
                 city: shippingValues.ciudad,
                 state: shippingValues.estado,
                 postal_code: shippingValues.codigoPostal,
@@ -639,7 +633,6 @@ function StripePaymentForm({
       );
 
       if (stripeError) {
-        console.error("[StripePaymentForm] Error de Stripe al confirmar pago:", stripeError);
         setPaymentError(stripeError.message || "Ocurrió un error con tu tarjeta.");
         toast({ title: "Error de Pago", description: stripeError.message || "Ocurrió un error con tu tarjeta.", variant: "destructive"});
         setIsLoadingPayment(false);
@@ -649,12 +642,11 @@ function StripePaymentForm({
       if (paymentIntent?.status === 'succeeded') {
         console.log("[StripePaymentForm] ¡Pago exitoso! PaymentIntent ID:", paymentIntent.id);
         
-        console.log("[StripePaymentForm] 3. Creando orden en la base de datos...");
         const orderResult = await createOrderAction(
           cartItems, 
-          savedAddressId, // Usar el ID de la dirección guardada
+          savedAddressId, 
           paymentIntent.id, 
-          paymentIntent.amount // Este es el monto en centavos
+          paymentIntent.amount 
         );
 
         if (orderResult.success && orderResult.orderId) {
@@ -663,23 +655,13 @@ function StripePaymentForm({
             description: `Gracias por tu compra. Tu ID de orden es: ${orderResult.orderId}.`,
             duration: 7000,
           });
-          
-          console.log("[StripePaymentForm] 4. Limpiando carrito...");
-          const clearCartResult = await clearCartAction();
-          if (clearCartResult.success) {
-            toast({ title: "Carrito Limpio", description: clearCartResult.message, duration: 3000 });
-          } else {
-            toast({ title: "Advertencia", description: `No se pudo limpiar el carrito automáticamente: ${clearCartResult.message}`, variant: "default", duration: 5000 });
-          }
-          
           router.push('/user-profile?order_success=true'); 
+          // TODO: Limpiar carrito aquí
         } else {
-          console.error("[StripePaymentForm] Error creando orden en la base de datos:", orderResult.message);
           setPaymentError(`El pago fue exitoso, pero hubo un problema al registrar tu orden: ${orderResult.message}. Por favor, contacta a soporte.`);
-          toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado, pero no pudimos registrar tu orden. Por favor, contacta a soporte con el ID de transacción: ${paymentIntent.id}`, variant: "destructive", duration: 10000 });
+          toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado, pero no pudimos registrar tu orden. Contacta a soporte con ID de transacción: ${paymentIntent.id}`, variant: "destructive", duration: 10000 });
         }
       } else {
-        console.warn("[StripePaymentForm] Estado del PaymentIntent no exitoso:", paymentIntent?.status);
         const errorMessage = paymentIntent?.last_payment_error?.message || `Estado del pago: ${paymentIntent?.status}. Por favor, intenta de nuevo.`;
         setPaymentError(errorMessage);
         toast({ title: "Estado del Pago Incierto", description: errorMessage, variant: "destructive"});
@@ -721,14 +703,14 @@ function StripePaymentForm({
       
       {paymentError && (
         <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-          {paymentError}
+          <AlertTriangle className="inline-block mr-2 h-4 w-4" /> {paymentError}
         </div>
       )}
 
       <Button 
         type="submit"
         className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
-        disabled={isLoadingPayment || !isShippingComplete || !stripe || !elements || !shippingFormContext.formState.isValid}
+        disabled={isLoadingPayment || !isShippingComplete || !stripe || !elements || (shippingFormContext && !shippingFormContext.formState.isValid)}
       >
         {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
         {isLoadingPayment ? 'Procesando Pago...' : 'Finalizar Compra'}
@@ -736,3 +718,5 @@ function StripePaymentForm({
     </form>
   );
 }
+
+    
