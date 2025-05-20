@@ -14,18 +14,18 @@ import {
   CardTitle, 
   CardFooter 
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input"; // Para el diálogo de añadir dirección
-import { Label } from "@/components/ui/label"; // Para el diálogo de añadir dirección
-import { Textarea } from "@/components/ui/textarea"; // Para el diálogo de añadir dirección
+import { Input } from "@/components/ui/input"; 
+import { Label } from "@/components/ui/label"; 
+import { Textarea } from "@/components/ui/textarea"; 
 import { 
   Form, 
   FormControl, 
-  FormDescription, 
+  FormProvider, // Añadido
   FormField, 
   FormItem, 
   FormLabel, 
   FormMessage 
-} from "@/components/ui/form"; // Para el diálogo de añadir dirección
+} from "@/components/ui/form"; 
 import {
   Dialog,
   DialogContent,
@@ -34,14 +34,14 @@ import {
   DialogTitle,
   DialogFooter,
   DialogClose,
-} from "@/components/ui/dialog"; // Para el diálogo de añadir dirección
+} from "@/components/ui/dialog"; 
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"; // Para el diálogo de añadir dirección
+} from "@/components/ui/select"; 
 
 import { 
   UserCircle, 
@@ -62,14 +62,14 @@ import {
   PlusCircle 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Tables, TablesInsert } from "@/lib/supabase/database.types"; // Importar TablesInsert
+import type { Tables, TablesInsert } from "@/lib/supabase/database.types"; 
 import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getUserOrdersAction, getUserAddressesAction, type UserOrderForDisplay } from "@/app/actions/userProfileActions";
-import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; // Para guardar la nueva dirección
-import { shippingFormSchema, type ShippingFormValues } from "@/app/checkout/page"; // Reutilizar de checkout
+import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
+import { shippingFormSchema, type ShippingFormValues } from "@/app/checkout/page"; 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
@@ -93,13 +93,12 @@ export default function UserProfilePage() {
   const [isLoadingAddresses, setIsLoadingAddresses] = React.useState(true);
   const [errorAddresses, setErrorAddresses] = React.useState<string | null>(null);
   const [isAddAddressDialogOpen, setIsAddAddressDialogOpen] = React.useState(false);
-  const [isSubmittingAddress, setIsSubmittingAddress] = React.useState(false);
-
+  
 
   React.useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL 
+      // Opcional: limpiar el parámetro de la URL para que no se muestre en recargas
       // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
@@ -141,7 +140,7 @@ export default function UserProfilePage() {
         .single();
 
       if (profileError) {
-        toast({ title: "Error de Perfil", description: `No se pudo cargar tu perfil: ${profileError.message}`, variant: "destructive" });
+        toast({ title: "Error de Perfil", description: \`No se pudo cargar tu perfil: \${profileError.message}\`, variant: "destructive" });
         setProfile(null); 
       } else if (!profileData) {
         toast({ title: "Perfil No Encontrado", description: "No se encontraron datos de perfil para tu cuenta.", variant: "destructive" });
@@ -173,9 +172,9 @@ export default function UserProfilePage() {
         }
       };
       fetchOrders();
-      fetchAddresses(); // Cargar direcciones también
+      fetchAddresses(); 
     }
-  }, [user, profile, isLoading, toast, fetchAddresses]); // fetchAddresses añadido como dependencia
+  }, [user, profile, isLoading, toast, fetchAddresses]); 
 
   const handleSignOut = async () => {
     setIsLoading(true); 
@@ -189,6 +188,7 @@ export default function UserProfilePage() {
     if (!status) return 'outline';
     switch (status) {
       case 'Pagado': // Añadido para manejar el nuevo estado
+        return 'default'; // Verde para 'Pagado' (asumiendo que tu 'default' es verde o primario)
       case 'Enviado':
       case 'Entregado':
         return 'default'; 
@@ -197,6 +197,8 @@ export default function UserProfilePage() {
       case 'Cancelado':
         return 'destructive';
       default:
+        // Para manejar cualquier estado futuro o inesperado
+        const _exhaustiveCheck: never = status;
         return 'outline';
     }
   };
@@ -314,9 +316,22 @@ export default function UserProfilePage() {
                 </CardContent>
               </Card>
             )}
+             {/* Sección Mis Favoritos (Placeholder) */}
+            <Card className="shadow-xl">
+              <CardHeader>
+                <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
+                  <Heart className="h-5 w-5" /> Mis Favoritos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Próximamente: Aquí podrás ver los productos que has marcado como favoritos.
+                </p>
+              </CardContent>
+            </Card>
           </section>
 
-          {/* Columna de Historial de Pedidos y Otras Secciones */}
+          {/* Columna de Historial de Pedidos y Direcciones */}
           <section className="md:col-span-2 space-y-6">
             <Card className="shadow-xl">
               <CardHeader>
@@ -389,7 +404,6 @@ export default function UserProfilePage() {
               </CardContent>
             </Card>
 
-             {/* Sección Mis Direcciones */}
             <Card className="shadow-xl">
               <CardHeader className="flex flex-row justify-between items-center">
                 <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
@@ -417,10 +431,10 @@ export default function UserProfilePage() {
                 ) : (
                   <div className="space-y-3">
                     {addresses.map((address) => (
-                      <Card key={address.id} className="p-4 text-sm">
+                      <Card key={address.id} className="p-4 text-sm border">
                         <p className="font-semibold">{address.calle}</p>
-                        <p>{address.ciudad}, {address.estado}, {address.codigo_postal}</p>
-                        <p>{address.pais}</p>
+                        <p>{address.ciudad}, {address.estado}</p>
+                        <p>{address.codigo_postal}, {address.pais}</p>
                         {/* Podríamos añadir botones de Editar/Eliminar aquí en el futuro */}
                       </Card>
                     ))}
@@ -428,14 +442,11 @@ export default function UserProfilePage() {
                 )}
               </CardContent>
             </Card>
-
             <AddAddressDialog
               isOpen={isAddAddressDialogOpen}
               onOpenChange={setIsAddAddressDialogOpen}
               onAddressAdded={handleAddressAdded}
             />
-
-
             <Card className="shadow-xl">
               <CardHeader>
                 <CardTitle className="text-xl text-earthy-green flex items-center gap-2"><Settings className="h-5 w-5" />Preferencias de la Cuenta</CardTitle>
@@ -444,14 +455,12 @@ export default function UserProfilePage() {
                 <p className="text-sm text-muted-foreground">Próximamente: Configura tus notificaciones por correo, suscripciones y otras preferencias.</p>
               </CardContent>
             </Card>
-            
           </section>
         </div>
       </main>
     </TooltipProvider>
   );
 }
-
 
 interface AddAddressDialogProps {
   isOpen: boolean;
@@ -463,39 +472,48 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
   const { toast } = useToast();
   const [isSubmittingAddress, setIsSubmittingAddress] = React.useState(false);
 
-  const form = useForm<ShippingFormValues>({
+  const formMethods = useForm<ShippingFormValues>({ // Cambiado para no colisionar con 'form' del componente padre
     resolver: zodResolver(shippingFormSchema),
     defaultValues: {
-      nombreCompleto: "",
+      nombreCompleto: "", // Asumiendo que estos campos existen en ShippingFormValues
       direccion: "",
       ciudad: "",
       estado: "",
       codigoPostal: "",
       pais: "México", 
-      telefono: "",
+      telefono: "", // Asumiendo que estos campos existen en ShippingFormValues
     },
   });
 
   const handleAddressSubmit = async (data: ShippingFormValues) => {
     setIsSubmittingAddress(true);
     console.log("[AddAddressDialog] Submitting new address:", data);
-    const result = await saveShippingAddressAction(data);
+    try {
+        const result = await saveShippingAddressAction(data); // Esta acción ya existe en checkoutActions
 
-    if (result.success) {
-      toast({
-        title: "Dirección Guardada",
-        description: result.message || "Tu nueva dirección ha sido guardada.",
-      });
-      form.reset();
-      onAddressAdded(); // Llama al callback para recargar y cerrar
-    } else {
-      toast({
-        title: "Error al Guardar Dirección",
-        description: result.message || "No se pudo guardar la dirección.",
-        variant: "destructive",
-      });
+        if (result.success) {
+        toast({
+            title: "Dirección Guardada",
+            description: result.message || "Tu nueva dirección ha sido guardada.",
+        });
+        formMethods.reset(); // Resetear el formulario específico de este diálogo
+        onAddressAdded(); 
+        } else {
+        toast({
+            title: "Error al Guardar Dirección",
+            description: result.message || "No se pudo guardar la dirección.",
+            variant: "destructive",
+        });
+        }
+    } catch (error: any) {
+        toast({
+            title: "Error Inesperado",
+            description: error.message || "Ocurrió un error al guardar la dirección.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSubmittingAddress(false);
     }
-    setIsSubmittingAddress(false);
   };
 
   return (
@@ -507,29 +525,29 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
             Ingresa los detalles de tu nueva dirección de envío.
           </DialogDescription>
         </DialogHeader>
-        <FormProvider {...form}> {/* Envuelve con FormProvider aquí si ShippingForm usa useFormContext */}
-          <form onSubmit={form.handleSubmit(handleAddressSubmit)} className="space-y-4 py-4">
+        <FormProvider {...formMethods}> {/* Usar formMethods aquí */}
+          <form onSubmit={formMethods.handleSubmit(handleAddressSubmit)} className="space-y-4 py-4">
             <FormField
-              control={form.control}
+              control={formMethods.control}
               name="nombreCompleto"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nombre Completo del Destinatario</FormLabel>
                   <FormControl>
-                    <Input placeholder="Juan Pérez" {...field} />
+                    <Input placeholder="Juan Pérez Rodríguez" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <FormField
-              control={form.control}
+              control={formMethods.control}
               name="direccion"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Dirección (Calle y Número)</FormLabel>
+                  <FormLabel>Dirección (Calle y Número, Colonia)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Av. Siempre Viva 742" {...field} />
+                    <Input placeholder="Av. Siempre Viva 742, Col. Springfield" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -537,7 +555,7 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
-                control={form.control}
+                control={formMethods.control}
                 name="ciudad"
                 render={({ field }) => (
                   <FormItem>
@@ -550,7 +568,7 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
                 )}
               />
               <FormField
-                control={form.control}
+                control={formMethods.control}
                 name="codigoPostal"
                 render={({ field }) => (
                   <FormItem>
@@ -563,21 +581,21 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
                 )}
               />
             </div>
+             <FormField
+                control={formMethods.control}
+                name="estado"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estado</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Jalisco" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             <FormField
-              control={form.control}
-              name="estado"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Estado/Provincia</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ej: Jalisco" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
+              control={formMethods.control}
               name="pais"
               render={({ field }) => (
                 <FormItem>
@@ -590,7 +608,6 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="México">México</SelectItem>
-                      {/* Puedes añadir más países aquí */}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -598,7 +615,7 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
               )}
             />
             <FormField
-              control={form.control}
+              control={formMethods.control}
               name="telefono"
               render={({ field }) => (
                 <FormItem>
@@ -612,11 +629,11 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
             />
             <DialogFooter className="pt-6">
               <DialogClose asChild>
-                <Button type="button" variant="outline" disabled={isSubmittingAddress}>
+                <Button type="button" variant="outline" onClick={() => { formMethods.reset(); onOpenChange(false);}} disabled={isSubmittingAddress}>
                   Cancelar
                 </Button>
               </DialogClose>
-              <Button type="submit" disabled={isSubmittingAddress || !form.formState.isValid} className="bg-primary hover:bg-primary/90">
+              <Button type="submit" disabled={isSubmittingAddress || !formMethods.formState.isValid} className="bg-primary hover:bg-primary/90">
                 {isSubmittingAddress ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Guardar Dirección
               </Button>
@@ -627,5 +644,3 @@ function AddAddressDialog({ isOpen, onOpenChange, onAddressAdded }: AddAddressDi
     </Dialog>
   );
 }
-```
-este es el codigo que se esta ejecutando, esta bien no tiene errores?

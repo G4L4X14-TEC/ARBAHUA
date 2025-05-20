@@ -124,12 +124,11 @@ export type Database = {
           cliente_id: string
           calle: string
           ciudad: string
-          estado: string
+          estado: string 
           codigo_postal: string 
           pais: string 
-          // Opcional: si las añadiste a la BD
-          // nombre_completo_destinatario?: string | null
-          // telefono_contacto?: string | null
+          nombre_completo_destinatario?: string | null // Asumiendo que podrías añadir esto
+          telefono_contacto?: string | null // Asumiendo que podrías añadir esto
         }
         Insert: {
           id?: string
@@ -139,9 +138,8 @@ export type Database = {
           estado: string
           codigo_postal: string
           pais: string
-          // Opcional:
-          // nombre_completo_destinatario?: string | null
-          // telefono_contacto?: string | null
+          nombre_completo_destinatario?: string | null
+          telefono_contacto?: string | null
         }
         Update: {
           id?: string
@@ -151,9 +149,8 @@ export type Database = {
           estado?: string
           codigo_postal?: string
           pais?: string
-          // Opcional:
-          // nombre_completo_destinatario?: string | null
-          // telefono_contacto?: string | null
+          nombre_completo_destinatario?: string | null
+          telefono_contacto?: string | null
         }
         Relationships: [
           {
@@ -202,26 +199,25 @@ export type Database = {
       }
       items_carrito: {
         Row: {
-          id?: string; // Si tu tabla realmente tiene un id PK. Si no, quita esto.
-                      // Tu esquema original indicaba PK compuesta (carrito_id, producto_id)
+          id?: string; 
           carrito_id: string
           producto_id: string
           cantidad: number
-          // precio_al_agregar?: number | null; // Si añadiste esta columna
+          precio_al_agregar?: number | null; 
         }
         Insert: {
           id?: string;
           carrito_id: string
           producto_id: string
           cantidad: number
-          // precio_al_agregar?: number | null;
+          precio_al_agregar?: number | null;
         }
         Update: {
           id?: string;
           carrito_id?: string
           producto_id?: string
           cantidad?: number
-          // precio_al_agregar?: number | null;
+          precio_al_agregar?: number | null;
         }
         Relationships: [
           {
@@ -280,7 +276,7 @@ export type Database = {
           metodo_pago: string 
           fecha_pago: string | null
           estado: Database["public"]["Enums"]["estado_pago_type"]
-          stripe_payment_intent_id?: string | null // Si la añadiste
+          stripe_payment_intent_id?: string | null 
         }
         Insert: {
           id?: string
@@ -316,7 +312,7 @@ export type Database = {
           cliente_id: string
           direccion_id: string
           total: number
-          estado: Database["public"]["Enums"]["estado_pedido_type"] | null // Permitir null si es posible
+          estado: Database["public"]["Enums"]["estado_pedido_type"] | null 
           fecha_pedido: string | null
         }
         Insert: {
@@ -436,7 +432,7 @@ export type Database = {
           producto_id: string
           puntuacion: number 
           comentario: string | null
-          fecha_resena: string | null // Normalizado de fecha_reseña
+          fecha_resena: string | null
         }
         Insert: {
           id?: string
