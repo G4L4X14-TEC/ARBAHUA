@@ -43,34 +43,34 @@ export default function ProductDetailPage({ params }: { params: { productId: str
       }
       setIsLoading(true);
       setError(null);
-      console.log(\`[ProductDetailPage] Fetching product details for ID: \${productId}\`);
+      console.log(`[ProductDetailPage] Fetching product details for ID: ${productId}`);
 
       const { data: productData, error: productError } = await supabase
         .from('productos')
-        .select(\`
+        .select(`
           *,
           imagenes_productos (id, url, es_principal),
           tiendas (id, nombre)
-        \`)
+        `)
         .eq('id', productId)
         .eq('estado', 'activo')
         .maybeSingle();
 
       if (productError) {
-        console.error(\`[ProductDetailPage] Error fetching product: \${productId}\`, productError.message);
+        console.error(`[ProductDetailPage] Error fetching product: ${productId}`, productError.message);
         setError(productError.message || "Error al cargar el producto.");
         setProduct(null);
       } else if (!productData) {
-        console.warn(\`[ProductDetailPage] Product not found or not active: \${productId}\`);
+        console.warn(`[ProductDetailPage] Product not found or not active: ${productId}`);
         setError("Producto no encontrado o no disponible.");
         setProduct(null);
       } else {
-        console.log(\`[ProductDetailPage] Product data received for \${productId}:\`, productData);
+        console.log(`[ProductDetailPage] Product data received for ${productId}:`, productData);
         setProduct(productData as ProductWithDetails);
         const images = (productData.imagenes_productos || []) as Array<Pick<Tables<'imagenes_productos'>, 'id' | 'url' | 'es_principal'>>;
         const principalImage = images.find(img => img.es_principal === true) || images[0];
         setSelectedImageUrl(principalImage?.url || null);
-        console.log(\`[ProductDetailPage] Selected image URL for \${productId}:\`, principalImage?.url);
+        console.log(`[ProductDetailPage] Selected image URL for ${productId}:`, principalImage?.url);
       }
       setIsLoading(false);
     };
@@ -81,7 +81,7 @@ export default function ProductDetailPage({ params }: { params: { productId: str
   const handleAddToCart = async () => {
     if (!product) return;
     setIsAddingToCart(true);
-    console.log(\`[ProductDetailPage] Adding product to cart: \${product.id}\`);
+    console.log(`[ProductDetailPage] Adding product to cart: ${product.id}`);
     try {
       const result = await addProductToCartAction(product.id, 1); // Añade 1 unidad
       if (result.success) {
@@ -146,8 +146,8 @@ export default function ProductDetailPage({ params }: { params: { productId: str
   }
   
   const allImages = (product.imagenes_productos || [])  as Array<Pick<Tables<'imagenes_productos'>, 'id' | 'url' | 'es_principal'>>;
-  const currentImageToDisplay = selectedImageUrl || \`https://placehold.co/600x600.png?text=\${encodeURIComponent(product.nombre)}\`;
-  console.log(\`[ProductDetailPage] Rendering with currentImageToDisplay: \${currentImageToDisplay}\`);
+  const currentImageToDisplay = selectedImageUrl || `https://placehold.co/600x600.png?text=${encodeURIComponent(product.nombre)}`;
+  console.log(`[ProductDetailPage] Rendering with currentImageToDisplay: ${currentImageToDisplay}`);
   console.log("[ProductDetailPage] All images for gallery:", allImages);
 
   return (
@@ -188,12 +188,12 @@ export default function ProductDetailPage({ params }: { params: { productId: str
                 img.url && ( 
                   <Card 
                     key={img.id} 
-                    className={\`overflow-hidden aspect-square relative border-2 bg-muted cursor-pointer transition-all \${selectedImageUrl === img.url ? 'border-primary' : 'border-transparent hover:border-primary/50'}\`}
+                    className={`overflow-hidden aspect-square relative border-2 bg-muted cursor-pointer transition-all ${selectedImageUrl === img.url ? 'border-primary' : 'border-transparent hover:border-primary/50'}`}
                     onClick={() => setSelectedImageUrl(img.url!)}
                   >
                     <Image
                       src={img.url}
-                      alt={\`Miniatura de \${product.nombre}\`}
+                      alt={`Miniatura de ${product.nombre}`}
                       fill
                       sizes="100px"
                       style={{ objectFit: 'cover' }}
@@ -213,7 +213,7 @@ export default function ProductDetailPage({ params }: { params: { productId: str
             <CardHeader>
               <CardTitle className="text-3xl md:text-4xl font-bold text-primary">{product.nombre}</CardTitle>
               {product.tiendas && (
-                <Link href={\`/store/\${product.tiendas.id}\`} className="text-md text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1 pt-1">
+                <Link href={`/store/${product.tiendas.id}`} className="text-md text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1 pt-1">
                   <Store size={16} /> {product.tiendas.nombre || 'Artesano Independiente'}
                 </Link>
               )}
@@ -229,7 +229,7 @@ export default function ProductDetailPage({ params }: { params: { productId: str
               <div className="text-sm">
                 <span className="font-medium text-foreground">Disponibilidad: </span> 
                 <span className={product.stock > 0 ? 'text-green-600' : 'text-red-600'}>
-                  {product.stock > 0 ? \`\${product.stock} en stock\` : 'Agotado'}
+                  {product.stock > 0 ? `${product.stock} en stock` : 'Agotado'}
                 </span>
               </div>
             </CardContent>

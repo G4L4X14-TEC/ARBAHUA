@@ -25,11 +25,13 @@ export default function CartPage() {
   const fetchCart = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    console.log("[CartPage] Fetching cart items...");
     try {
       const items = await getCartItemsAction();
+      console.log("[CartPage] Cart items fetched:", items);
       setCartItems(items);
     } catch (err: any) {
-      console.error("Error fetching cart items:", err);
+      console.error("[CartPage] Error fetching cart items:", err);
       setError("No se pudieron cargar los artículos del carrito. Inténtalo de nuevo.");
       toast({
         title: "Error al cargar carrito",
@@ -43,12 +45,23 @@ export default function CartPage() {
 
   React.useEffect(() => {
     const checkUserAndFetchCart = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      console.log("[CartPage] Checking user and fetching cart...");
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error("[CartPage] Error getting session:", sessionError);
+        toast({ title: "Error de Sesión", description: "No se pudo verificar tu sesión.", variant: "destructive" });
+        router.push("/login?redirect=/cart");
+        return;
+      }
+
       if (!session?.user) {
+        console.log("[CartPage] User not logged in. Redirecting to login.");
         toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para ver tu carrito.", variant: "destructive" });
         router.push("/login?redirect=/cart");
         return;
       }
+      console.log("[CartPage] User authenticated:", session.user.id);
       setUser(session.user);
       fetchCart();
     };
@@ -59,16 +72,25 @@ export default function CartPage() {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
 
-  const handleRemoveItem = async (itemId: string) => {
-    // Lógica para eliminar item (se implementará después)
-    console.log("Eliminar item:", itemId);
+  // Las funciones handleRemoveItem y handleUpdateQuantity son placeholders
+  // La lógica real se implementará cuando abordemos las acciones de modificar el carrito.
+  const handleRemoveItem = async (productId: string) => {
+    console.log("Solicitud para eliminar producto del carrito (ID de producto):", productId);
+    // Aquí iría la llamada a una Server Action para eliminar el item.
+    // Ejemplo: await removeProductFromCartAction(productId);
+    // Y luego, re-fetch del carrito: fetchCart();
     toast({ title: "Función no implementada", description: "La eliminación de productos del carrito se añadirá pronto."});
   };
 
-  const handleUpdateQuantity = async (itemId: string, newQuantity: number) => {
-    // Lógica para actualizar cantidad (se implementará después)
-    if (newQuantity < 1) return; // No permitir cantidad menor a 1
-    console.log("Actualizar cantidad:", itemId, newQuantity);
+  const handleUpdateQuantity = async (productId: string, newQuantity: number) => {
+    if (newQuantity < 1) {
+      toast({ title: "Cantidad inválida", description: "La cantidad no puede ser menor a 1.", variant: "destructive" });
+      return;
+    }
+    console.log("Solicitud para actualizar cantidad (ID de producto):", productId, "Nueva cantidad:", newQuantity);
+    // Aquí iría la llamada a una Server Action para actualizar la cantidad.
+    // Ejemplo: await updateCartItemQuantityAction(productId, newQuantity);
+    // Y luego, re-fetch del carrito: fetchCart();
     toast({ title: "Función no implementada", description: "La actualización de cantidades se añadirá pronto."});
   };
 
@@ -135,7 +157,8 @@ export default function CartPage() {
         <div className="lg:w-2/3 space-y-6">
           <h1 className="text-3xl font-bold text-primary mb-6">Tu Carrito de Compras</h1>
           {cartItems.map((item) => (
-            <Card key={item.id} className="flex flex-col sm:flex-row gap-4 p-4 shadow-md">
+            // Usamos item.productos.id como key ya que cada producto es único en el carrito
+            <Card key={item.productos.id} className="flex flex-col sm:flex-row gap-4 p-4 shadow-md">
               <div className="relative w-full sm:w-28 h-36 sm:h-28 rounded-md overflow-hidden bg-muted flex-shrink-0">
                 <Image
                   src={item.imagen_url}
@@ -155,18 +178,34 @@ export default function CartPage() {
                 </div>
                 <div className="flex items-center justify-between mt-2 sm:mt-0">
                   <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleUpdateQuantity(item.id, item.cantidad - 1)} disabled={item.cantidad <= 1}>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-7 w-7" 
+                      onClick={() => handleUpdateQuantity(item.productos.id, item.cantidad - 1)} 
+                      disabled={item.cantidad <= 1}
+                    >
                       <Minus className="h-3 w-3" />
                     </Button>
                     <span className="text-sm w-8 text-center">{item.cantidad}</span>
-                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => handleUpdateQuantity(item.id, item.cantidad + 1)}>
+                    <Button 
+                      variant="outline" 
+                      size="icon" 
+                      className="h-7 w-7" 
+                      onClick={() => handleUpdateQuantity(item.productos.id, item.cantidad + 1)}
+                    >
                       <Plus className="h-3 w-3" />
                     </Button>
                   </div>
                   <p className="text-md font-semibold text-primary">Subtotal: MXN\${item.subtotal.toFixed(2)}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 self-start sm:self-center" onClick={() => handleRemoveItem(item.id)}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="text-destructive hover:bg-destructive/10 self-start sm:self-center" 
+                onClick={() => handleRemoveItem(item.productos.id)}
+              >
                 <Trash2 className="h-5 w-5" />
                 <span className="sr-only">Eliminar</span>
               </Button>
@@ -182,7 +221,7 @@ export default function CartPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between text-muted-foreground">
-                <span>Subtotal ({cartItems.length} items)</span>
+                <span>Subtotal ({cartItems.length} {cartItems.length === 1 ? 'item' : 'items'})</span>
                 <span>MXN\${calculateTotal().toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-muted-foreground">
