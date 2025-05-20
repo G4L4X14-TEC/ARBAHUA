@@ -22,6 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
+import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; // Importar la nueva acción
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -46,11 +47,12 @@ const shippingFormSchema = z.object({
   nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
   direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
+  estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}), // Campo añadido
   codigoPostal: z.string().regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
   pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
   telefono: z.string().regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
 });
-type ShippingFormValues = z.infer<typeof shippingFormSchema>;
+export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -62,8 +64,11 @@ export default function CheckoutPage() {
   const [cartItems, setCartItems] = React.useState<CartItemForDisplay[]>([]);
   const [isLoadingCart, setIsLoadingCart] = React.useState(true);
   const [errorCart, setErrorCart] = React.useState<string | null>(null);
+  
   const [shippingData, setShippingData] = React.useState<ShippingFormValues | null>(null);
   const [isShippingFormValidAndSubmitted, setIsShippingFormValidAndSubmitted] = React.useState(false);
+  const [isSavingAddress, setIsSavingAddress] = React.useState(false);
+  const [savedAddressId, setSavedAddressId] = React.useState<string | null>(null);
 
 
   React.useEffect(() => {
@@ -118,11 +123,26 @@ export default function CheckoutPage() {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
 
-  const handleShippingSubmitSuccess = (data: ShippingFormValues) => {
-    console.log("Shipping Data Submitted:", data);
-    setShippingData(data);
-    setIsShippingFormValidAndSubmitted(true);
-    toast({ title: "Información de Envío Guardada", description: "Puedes proceder al pago." });
+  const handleShippingSubmitSuccess = async (data: ShippingFormValues) => {
+    console.log("[CheckoutPage] Shipping Data to be saved:", data);
+    setIsSavingAddress(true);
+    try {
+      const result = await saveShippingAddressAction(data);
+      if (result.success && result.addressId) {
+        setShippingData(data);
+        setIsShippingFormValidAndSubmitted(true);
+        setSavedAddressId(result.addressId);
+        toast({ title: "Información de Envío Guardada", description: "Puedes proceder al pago." });
+        console.log("[CheckoutPage] Address saved with ID:", result.addressId);
+      } else {
+        toast({ title: "Error al Guardar Dirección", description: result.message, variant: "destructive" });
+      }
+    } catch (error: any) {
+      console.error("[CheckoutPage] Error calling saveShippingAddressAction:", error);
+      toast({ title: "Error Inesperado", description: "No se pudo guardar la dirección de envío.", variant: "destructive"});
+    } finally {
+      setIsSavingAddress(false);
+    }
   };
 
 
@@ -156,6 +176,7 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0) {
+    // Este caso ya se maneja en el useEffect que redirige a /cart, pero es una salvaguarda.
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -194,6 +215,7 @@ export default function CheckoutPage() {
         <section className="lg:col-span-2 space-y-8">
           <ShippingForm 
             onSubmitSuccess={handleShippingSubmitSuccess}
+            isSubmitting={isSavingAddress}
           />
           {isShippingFormValidAndSubmitted && shippingData && (
             <PaymentSection 
@@ -252,9 +274,10 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
 
 interface ShippingFormProps {
   onSubmitSuccess: (data: ShippingFormValues) => void;
+  isSubmitting: boolean;
 }
 
-function ShippingForm({ onSubmitSuccess }: ShippingFormProps) {
+function ShippingForm({ onSubmitSuccess, isSubmitting }: ShippingFormProps) {
   const form = useForm<ShippingFormValues>({
     resolver: zodResolver(shippingFormSchema),
     mode: "onChange", 
@@ -262,6 +285,7 @@ function ShippingForm({ onSubmitSuccess }: ShippingFormProps) {
       nombreCompleto: "",
       direccion: "",
       ciudad: "",
+      estado: "", // Campo añadido
       codigoPostal: "",
       pais: "México", 
       telefono: "",
@@ -324,6 +348,21 @@ function ShippingForm({ onSubmitSuccess }: ShippingFormProps) {
                   </FormItem>
                 )}
               />
+               <FormField
+                control={form.control}
+                name="estado" // Campo añadido
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Estado</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ej: Jalisco" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"> {/* Nuevo grid para CP y País */}
               <FormField
                 control={form.control}
                 name="codigoPostal"
@@ -337,29 +376,29 @@ function ShippingForm({ onSubmitSuccess }: ShippingFormProps) {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="pais"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>País</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecciona un país" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="México">México</SelectItem>
+                        {/* Puedes añadir más países aquí si es necesario */}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
-            <FormField
-              control={form.control}
-              name="pais"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>País</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecciona un país" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="México">México</SelectItem>
-                      {/* <SelectItem value="OtroPaís">OtroPaís</SelectItem> */}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             <FormField
               control={form.control}
               name="telefono"
@@ -376,9 +415,9 @@ function ShippingForm({ onSubmitSuccess }: ShippingFormProps) {
              <Button 
               type="submit" 
               className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={!form.formState.isValid || form.formState.isSubmitting}
+              disabled={!form.formState.isValid || form.formState.isSubmitting || isSubmitting}
             >
-              {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {form.formState.isSubmitting || isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Guardar Dirección y Continuar al Pago
             </Button>
           </form>
@@ -390,7 +429,7 @@ function ShippingForm({ onSubmitSuccess }: ShippingFormProps) {
 
 interface PaymentSectionProps {
   isShippingComplete: boolean;
-  shippingValues: ShippingFormValues | null;
+  shippingValues: ShippingFormValues | null; // Los valores del formulario de envío
 }
 
 function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionProps) {
@@ -409,9 +448,10 @@ function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionPr
 
     setIsLoadingPayment(true);
     console.log("Simulating payment with shipping data:", shippingValues);
+    // Aquí es donde, en el futuro, se llamaría a Stripe y se crearía la orden.
     toast({
       title: "Procesando Pago (Simulación)",
-      description: "La integración real con Stripe se implementará después.",
+      description: "La integración real con Stripe y la creación de la orden se implementarán después.",
     });
     setTimeout(() => {
       setIsLoadingPayment(false);
@@ -419,6 +459,8 @@ function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionPr
         title: "Pago Simulado Exitoso",
         description: "¡Gracias por tu compra (simulada)!",
       });
+      // Idealmente, aquí se redirigiría a una página de confirmación de orden o al perfil del usuario.
+      // router.push('/order-confirmation/SOME_ORDER_ID');
     }, 2000);
   };
 
@@ -428,6 +470,9 @@ function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionPr
         <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
           <CreditCard className="h-5 w-5"/> Información de Pago
         </CardTitle>
+        <CardDescription>
+          {isShippingComplete ? "Ingresa tus datos de pago." : "Completa la información de envío para continuar."}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="bg-muted/50 p-6 rounded-md text-center space-y-3">
