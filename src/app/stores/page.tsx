@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ export default function StoresPage() {
             Conoce a los creadores detrás de las artesanías.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent> {/* Asegurarse de que esta etiqueta se cierre correctamente */}
           <p className="text-foreground mb-6">
             Esta página mostrará un listado de todos los artesanos y sus tiendas. 
             Actualmente está en construcción. ¡Gracias por tu paciencia!
@@ -24,7 +25,7 @@ export default function StoresPage() {
           <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
             <Link href="/">Volver a la Página de Inicio</Link>
           </Button>
-        </CardFooter>
+        </CardContent> {/* Etiqueta de cierre correcta */}
         <CardFooter>
           <p className="text-xs text-muted-foreground w-full text-center">
             Explora la diversidad de talento en Arbahua.
@@ -34,5 +35,3 @@ export default function StoresPage() {
     </main>
   );
 }
-
-    
