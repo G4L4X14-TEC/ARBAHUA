@@ -8,7 +8,7 @@ import type { Tables, Database, Json, TablesInsert, TablesUpdate } from '@/lib/s
 // Tipo para los items del carrito tal como se mostrarán, incluyendo detalles del producto
 export type CartItemForDisplay = Tables<'items_carrito'> & {
   productos: Pick<Tables<'productos'>, 'id' | 'nombre' | 'precio'> & {
-    imagenes_productos: Array<Pick<Tables<'imagenes_productos'>, 'url'>> | null; 
+    imagenes_productos: Array<Pick<Tables<'imagenes_productos'>, 'url' | 'es_principal'>> | null; 
   };
   subtotal: number;
   imagen_url: string; 
@@ -16,7 +16,7 @@ export type CartItemForDisplay = Tables<'items_carrito'> & {
 
 // Helper para crear el cliente de Supabase en Server Actions
  function createSupabaseServerClientAction() {
-  const cookieStore = await cookies();
+  const cookieStore =  cookies(); // Llamar a cookies() una vez
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -34,10 +34,14 @@ export type CartItemForDisplay = Tables<'items_carrito'> & {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
+          // El try...catch puede ser omitido aquí si la documentación de @supabase/ssr no lo requiere
+          // o si Next.js maneja esto de forma diferente en Server Actions.
+          // Por ahora, lo mantendremos para seguridad, pero si sigue dando problemas de contexto,
+          // podría ser un punto a revisar.
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // Silently ignore (e.g. if called from a static generation context)
+            // Silently ignore (e.g. if called from a static generation context, though less likely in SA)
           }
         },
         remove(name: string, options: CookieOptions) {
@@ -88,7 +92,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
 
     const { data: itemsData, error: itemsError } = await supabase
       .from('items_carrito')
-      .select(`
+      .select(\`
         *,
         productos (
           id,
@@ -96,10 +100,10 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
           precio,
           imagenes_productos (
             url,
-            es_principal
+            es_principal 
           )
         )
-      `)
+      \`)
       .eq('carrito_id', cartData.id)
       .order('productos(nombre)', { ascending: true });
 
@@ -112,12 +116,16 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
       console.log('[getCartItemsAction] No items found in cart:', cartData.id);
       return [];
     }
-    console.log(`[getCartItemsAction] Fetched ${itemsData.length} cart items.`);
+    console.log(\`[getCartItemsAction] Fetched \${itemsData.length} cart items.\`);
 
     const cartItemsForDisplay: CartItemForDisplay[] = itemsData.map(item => {
-      const producto = item.productos as CartItemForDisplay['productos'] | null; 
+      // Ajuste de tipado para 'productos' y 'imagenes_productos'
+      const producto = item.productos as (Pick<Tables<'productos'>, 'id' | 'nombre' | 'precio'> & {
+        imagenes_productos: Array<Pick<Tables<'imagenes_productos'>, 'url' | 'es_principal'>> | null;
+      }) | null;
+      
       if (!producto) {
-        console.warn(`[getCartItemsAction] Product details missing for item with producto_id: ${item.producto_id}`);
+        console.warn(\`[getCartItemsAction] Product details missing for item with producto_id: \${item.producto_id}\`);
         return {
           ...item,
           productos: { id: item.producto_id, nombre: 'Producto no disponible', precio: 0, imagenes_productos: [] },
@@ -130,13 +138,13 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
       const principalImage = principalImageArray?.[0];
       const anyImage = producto.imagenes_productos?.[0];
       const placeholderText = encodeURIComponent(producto.nombre);
-      const imageUrl = principalImage?.url || anyImage?.url || `https://placehold.co/100x100.png?text=${placeholderText}`;
+      const imageUrl = principalImage?.url || anyImage?.url || \`https://placehold.co/100x100.png?text=\${placeholderText}\`;
       
       const subtotal = (producto.precio || 0) * item.cantidad;
 
       return {
         ...item,
-        productos: producto,
+        productos: producto, // producto ya tiene el tipo correcto aquí
         subtotal: subtotal,
         imagen_url: imageUrl,
       };
@@ -177,7 +185,7 @@ export async function addProductToCartAction(
 
     if (cartError) {
       console.error('[addProductToCartAction] Error fetching cart:', cartError.message);
-      return { success: false, message: `Error al obtener el carrito: ${cartError.message}` };
+      return { success: false, message: \`Error al obtener el carrito: \${cartError.message}\` };
     }
 
     if (!cart) {
@@ -190,7 +198,7 @@ export async function addProductToCartAction(
       
       if (newCartError || !newCart) {
         console.error('[addProductToCartAction] Error creating new cart:', newCartError?.message);
-        return { success: false, message: `Error al crear el carrito: ${newCartError?.message || 'Error desconocido'}` };
+        return { success: false, message: \`Error al crear el carrito: \${newCartError?.message || 'Error desconocido'}\` };
       }
       cart = newCart;
       console.log('[addProductToCartAction] New cart created with ID:', cart.id);
@@ -210,7 +218,7 @@ export async function addProductToCartAction(
 
     if (existingItemError) {
       console.error('[addProductToCartAction] Error checking for existing item:', existingItemError.message);
-      return { success: false, message: `Error al verificar el producto en el carrito: ${existingItemError.message}` };
+      return { success: false, message: \`Error al verificar el producto en el carrito: \${existingItemError.message}\` };
     }
 
     if (existingItem) {
@@ -225,7 +233,7 @@ export async function addProductToCartAction(
       
       if (updateError) {
         console.error('[addProductToCartAction] Error updating item quantity:', updateError.message);
-        return { success: false, message: `Error al actualizar la cantidad: ${updateError.message}` };
+        return { success: false, message: \`Error al actualizar la cantidad: \${updateError.message}\` };
       }
       console.log('[addProductToCartAction] Item quantity updated to:', newQuantity);
     } else {
@@ -237,7 +245,7 @@ export async function addProductToCartAction(
 
       if (insertError) {
         console.error('[addProductToCartAction] Error inserting new item:', insertError.message);
-        return { success: false, message: `Error al añadir el producto: ${insertError.message}` };
+        return { success: false, message: \`Error al añadir el producto: \${insertError.message}\` };
       }
       console.log('[addProductToCartAction] New item inserted successfully.');
     }
@@ -246,6 +254,6 @@ export async function addProductToCartAction(
 
   } catch (e: any) {
     console.error("[addProductToCartAction] Critical error:", e.message);
-    return { success: false, message: `Error inesperado: ${e.message}` };
+    return { success: false, message: \`Error inesperado: \${e.message}\` };
   }
 }
