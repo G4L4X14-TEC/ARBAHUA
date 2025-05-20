@@ -1,4 +1,4 @@
-\"use client\";
+"use client";
 
 import * as React from "react";
 import Link from "next/link";
@@ -54,9 +54,9 @@ const shippingFormSchema = z.object({
   direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
   estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}), // Añadido estado
-  codigoPostal: z.string().regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
+  codigoPostal: z.string().regex(/^d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
   pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
-  telefono: z.string().regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
+  telefono: z.string().regex(/^d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
 });
 export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
@@ -315,13 +315,13 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
                 <p className="text-xs text-muted-foreground">Cantidad: {item.cantidad}</p>
               </div>
             </div>
-            <p className="font-medium text-foreground">MXN\${item.subtotal.toFixed(2)}</p>
+            <p className="font-medium text-foreground">MXN${item.subtotal.toFixed(2)}</p>
           </div>
         ))}
         <Separator />
         <div className="flex justify-between font-semibold text-lg">
           <span>Total:</span>
-          <span>MXN\${total.toFixed(2)}</span>
+          <span>MXN${total.toFixed(2)}</span>
         </div>
       </CardContent>
     </Card>
@@ -648,7 +648,7 @@ function StripePaymentForm({
         if (orderResult.success && orderResult.orderId) {
           toast({
             title: "¡Pedido Creado Exitosamente!",
-            description: \`Gracias por tu compra. Tu ID de orden es: \${orderResult.orderId}.\`,
+            description: `Gracias por tu compra. Tu ID de orden es: ${orderResult.orderId}.`,
             duration: 7000,
           });
           
@@ -657,18 +657,18 @@ function StripePaymentForm({
           if (clearCartResult.success) {
             toast({ title: "Carrito Limpio", description: clearCartResult.message, duration: 3000 });
           } else {
-            toast({ title: "Advertencia", description: \`No se pudo limpiar el carrito automáticamente: \${clearCartResult.message}\`, variant: "default", duration: 5000 });
+            toast({ title: "Advertencia", description: `No se pudo limpiar el carrito automáticamente: ${clearCartResult.message}`, variant: "default", duration: 5000 });
           }
           
           router.push('/user-profile?order_success=true'); 
         } else {
           console.error("[StripePaymentForm] Error creando orden en la base de datos:", orderResult.message);
-          setPaymentError(\`El pago fue exitoso, pero hubo un problema al registrar tu orden: \${orderResult.message}. Por favor, contacta a soporte.\`);
-          toast({ title: "Error Crítico al Registrar Orden", description: \`Tu pago fue procesado, pero no pudimos registrar tu orden. Por favor, contacta a soporte con el ID de transacción: \${paymentIntent.id}\`, variant: "destructive", duration: 10000 });
+          setPaymentError(`El pago fue exitoso, pero hubo un problema al registrar tu orden: ${orderResult.message}. Por favor, contacta a soporte.`);
+          toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado, pero no pudimos registrar tu orden. Por favor, contacta a soporte con el ID de transacción: ${paymentIntent.id}`, variant: "destructive", duration: 10000 });
         }
       } else {
         console.warn("[StripePaymentForm] Estado del PaymentIntent no exitoso:", paymentIntent?.status);
-        const errorMessage = paymentIntent?.last_payment_error?.message || \`Estado del pago: \${paymentIntent?.status}. Por favor, intenta de nuevo.\`;
+        const errorMessage = paymentIntent?.last_payment_error?.message || `Estado del pago: ${paymentIntent?.status}. Por favor, intenta de nuevo.`;
         setPaymentError(errorMessage);
         toast({ title: "Estado del Pago Incierto", description: errorMessage, variant: "destructive"});
       }
@@ -724,8 +724,3 @@ function StripePaymentForm({
     </form>
   );
 }
-
-
-```este es el codigo que tengo actualmente, me esta saliendo el siguiente error
-
-[StripePaymentForm] Error creando orden en la base de datos: "Error al crear el pedido: relation \"pagos\" does not exist"

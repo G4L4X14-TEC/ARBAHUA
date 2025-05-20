@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -19,11 +20,6 @@ async function createSupabaseServerClientAction() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // console.log('[SupabaseServerClientAction - Cart] Initializing Supabase client.');
-  // console.log(`  NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
-  // console.log(`  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
-
-
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[SupabaseServerClientAction - Cart] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
     return null;
@@ -38,9 +34,11 @@ async function createSupabaseServerClientAction() {
           return cookieStore.get(name)?.value;
         },
         set(name: string, value: string, options: CookieOptions) {
+          // Server Actions pueden mutar cookies directamente
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: CookieOptions) {
+          // Server Actions pueden mutar cookies directamente
           cookieStore.delete({ name, ...options });
         },
       },
@@ -117,6 +115,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
       
       if (!producto) {
         console.warn(\`[getCartItemsAction] Product details missing for item with producto_id: \${item.producto_id}\`);
+        // Proporcionar valores por defecto para evitar errores de renderizado si producto es null
         return {
           ...item,
           productos: { id: item.producto_id, nombre: 'Producto no disponible', precio: 0, imagenes_productos: [] },
@@ -135,7 +134,7 @@ export async function getCartItemsAction(): Promise<CartItemForDisplay[]> {
 
       return {
         ...item,
-        productos: producto,
+        productos: producto, // producto ya tiene la estructura correcta
         subtotal: subtotal,
         imagen_url: imageUrl,
       };
@@ -395,4 +394,6 @@ export async function clearCartAction(): Promise<{ success: boolean; message: st
 
   } catch (e: any) {
     console.error("[clearCartAction] Critical error in action:", e.message);
-    return { success: false, message: \`Error inesperado al limpiar el carrito:
+    return { success: false, message: \`Error inesperado al limpiar el carrito: \${e.message}\` };
+  }
+}
