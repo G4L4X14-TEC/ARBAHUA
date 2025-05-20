@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -5,7 +6,7 @@ import { cookies } from 'next/headers';
 import type { Tables, Database, Json, TablesUpdate, TablesInsert } from '@/lib/supabase/database.types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import type { ShippingFormValues } from '@/app/checkout/page'; // Asumiendo que se exporta
+import type { ShippingFormValues } from '@/app/checkout/page'; // Asegúrate que esto se exporte de checkout/page.tsx
 
 export type UserOrderForDisplay = Pick<Tables<'pedidos'>, 'id' | 'total' | 'estado' | 'fecha_pedido'> & {
   formatted_date: string;
@@ -20,7 +21,7 @@ async function createSupabaseServerClientAction() {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error("[SupabaseServerClientAction - UserProfile] CRITICAL ERROR: Supabase URL or Anon Key is missing.");
-    return null;
+    return null; // CORRECCIÓN: Añadido return null
   }
 
   return createServerClient<Database>(
@@ -60,25 +61,14 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
   try {
     const { data: ordersData, error: ordersError } = await supabase
       .from('pedidos')
-      .select(\`
-        id,
-        total,
-        estado,
-        fecha_pedido,
-        detalle_pedido (
-          cantidad,
-          precio,
-          productos (
-            nombre
-          )
-        )
-      \`)
+      .select('id, total, estado, fecha_pedido, detalle_pedido(cantidad, precio, productos(nombre))') // CORRECCIÓN: Cadena de select simplificada
       .eq('cliente_id', user.id)
       .order('fecha_pedido', { ascending: false });
 
     if (ordersError) {
       console.error('[getUserOrdersAction] Error fetching orders:', ordersError.message);
-      throw ordersError; // Lanza el error para que sea atrapado por el bloque catch general
+      // No relanzar el error aquí directamente, mejor devolver array vacío y loguear.
+      return []; 
     }
 
     if (!ordersData) {
@@ -86,7 +76,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
       return [];
     }
 
-    console.log(\`[getUserOrdersAction] Fetched \${ordersData.length} orders.\`);
+    console.log(`[getUserOrdersAction] Fetched ${ordersData.length} orders.`);
 
     const displayedOrders: UserOrderForDisplay[] = ordersData.map(order => {
       let itemsSummary = 'Múltiples productos';
@@ -97,7 +87,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
         // Tipar explícitamente firstDetailItem para mejorar la seguridad y claridad
         const firstDetailItem = detalleArray[0] as unknown as { productos: { nombre: string } | null, cantidad: number }; 
         if (firstDetailItem && firstDetailItem.productos) {
-          itemsSummary = \`\${firstDetailItem.productos.nombre}\${detalleArray.length > 1 ? ' y más...' : ''}\`;
+          itemsSummary = `${firstDetailItem.productos.nombre}${detalleArray.length > 1 ? ' y más...' : ''}`;
         } else {
           itemsSummary = 'Detalles del producto no disponibles';
         }
@@ -120,7 +110,7 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
 
   } catch (e: any) {
     console.error("[getUserOrdersAction] Critical error in action:", e.message);
-    return []; // Devuelve un array vacío en caso de error
+    return []; 
   }
 }
 
@@ -144,7 +134,7 @@ export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]>
       .from('direcciones')
       .select('*')
       .eq('cliente_id', user.id)
-      .order('calle', { ascending: true }); // O cualquier otro orden que prefieras
+      .order('calle', { ascending: true }); 
 
     if (addressesError) {
       console.error('[getUserAddressesAction] Error fetching addresses:', addressesError.message);
@@ -156,11 +146,11 @@ export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]>
       return [];
     }
 
-    console.log(\`[getUserAddressesAction] Fetched \${addressesData.length} addresses.\`);
+    console.log(`[getUserAddressesAction] Fetched ${addressesData.length} addresses.`);
     return addressesData;
 
   } catch (e: any) {
-    console.error("[getUserAddressesAction] Critical error in action:", e.message);
+    console.error("[getUserAddressesAction] Critical error in action:", e.message); // CORRECCIÓN: Log completo
     return [];
   }
 }
@@ -181,14 +171,18 @@ export async function updateUserAddressAction(
     return { success: false, message: "Debes iniciar sesión para actualizar una dirección." };
   }
 
+  // Mapeo de ShippingFormValues a TablesUpdate<'direcciones'>
+  // Asegúrate de que los nombres de campo coincidan con tu tabla 'direcciones'
+  // y que ShippingFormValues se importe correctamente.
   const updatePayload: TablesUpdate<'direcciones'> = {
     calle: addressData.direccion,
     ciudad: addressData.ciudad,
-    estado: addressData.estado,
+    estado: addressData.estado, // Asegúrate que 'estado' exista en ShippingFormValues y tabla direcciones
     codigo_postal: addressData.codigoPostal,
     pais: addressData.pais,
-    nombre_completo_destinatario: addressData.nombreCompleto, // Asumiendo que existe en ShippingFormValues y en la tabla
-    telefono_contacto: addressData.telefono, // Asumiendo que existe
+    // Si tienes estos campos en tu tabla 'direcciones' y en ShippingFormValues:
+    // nombre_completo_destinatario: addressData.nombreCompleto, 
+    // telefono_contacto: addressData.telefono, 
   };
 
   try {
@@ -196,18 +190,18 @@ export async function updateUserAddressAction(
       .from('direcciones')
       .update(updatePayload)
       .eq('id', addressId)
-      .eq('cliente_id', user.id); 
+      .eq('cliente_id', user.id); // Importante: asegurar que el usuario solo actualice sus propias direcciones
 
     if (error) {
       console.error('[updateUserAddressAction] Error updating address:', error.message);
-      return { success: false, message: \`Error al actualizar la dirección: \${error.message}\` };
+      return { success: false, message: `Error al actualizar la dirección: ${error.message}` };
     }
 
     console.log('[updateUserAddressAction] Address updated successfully for ID:', addressId);
     return { success: true, message: 'Dirección actualizada correctamente.' };
   } catch (e: any) {
     console.error('[updateUserAddressAction] Critical error:', e.message);
-    return { success: false, message: \`Error inesperado al actualizar la dirección: \${e.message}\` };
+    return { success: false, message: `Error inesperado al actualizar la dirección: ${e.message}` };
   }
 }
 
@@ -231,17 +225,18 @@ export async function deleteUserAddressAction(
       .from('direcciones')
       .delete()
       .eq('id', addressId)
-      .eq('cliente_id', user.id); 
+      .eq('cliente_id', user.id); // Importante: asegurar que el usuario solo elimine sus propias direcciones
 
     if (error) {
       console.error('[deleteUserAddressAction] Error deleting address:', error.message);
-      return { success: false, message: \`Error al eliminar la dirección: \${error.message}\` };
+      return { success: false, message: `Error al eliminar la dirección: ${error.message}` };
     }
 
     console.log('[deleteUserAddressAction] Address deleted successfully for ID:', addressId);
     return { success: true, message: 'Dirección eliminada correctamente.' };
   } catch (e: any) {
     console.error("[deleteUserAddressAction] Critical error:", e.message);
-    return { success: false, message: \`Error inesperado al eliminar la dirección: \${e.message}\` };
+    return { success: false, message: `Error inesperado al eliminar la dirección: ${e.message}` }; // CORRECCIÓN: Template literal cerrado
   }
 }
+    

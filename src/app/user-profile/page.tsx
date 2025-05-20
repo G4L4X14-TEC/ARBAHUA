@@ -141,7 +141,7 @@ export default function UserProfilePage() {
       .single();
 
     if (profileError || !profileData) {
-      toast({ title: "Error de Perfil", description: \`No se pudo cargar tu perfil: \${profileError?.message || 'Error desconocido'}\`, variant: "destructive" });
+      toast({ title: "Error de Perfil", description: `No se pudo cargar tu perfil: ${profileError?.message || 'Error desconocido'}`, variant: "destructive" });
       setProfile(null); 
     } else {
       setProfile(profileData);
@@ -395,7 +395,7 @@ export default function UserProfilePage() {
                         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-muted/30 gap-2">
                           <div>
                             <p className="text-sm font-medium text-foreground">
-                              Pedido <span className="text-primary">#\${order.id.substring(0, 8).toUpperCase()}</span>
+                              Pedido <span className="text-primary">#${order.id.substring(0, 8).toUpperCase()}</span>
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {order.formatted_date}
@@ -407,7 +407,7 @@ export default function UserProfilePage() {
                         </CardHeader>
                         <CardContent className="p-4 space-y-2">
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> MXN\${order.total.toFixed(2)}
+                            <span className="font-medium">Total:</span> MXN${order.total.toFixed(2)}
                           </p>
                           <p className="text-sm text-muted-foreground italic">
                             <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
@@ -597,7 +597,7 @@ function AddAddressDialog({
     if (result.success) {
       toast({
         title: existingAddress ? "Dirección Actualizada" : "Dirección Guardada",
-        description: result.message || \`Tu dirección ha sido \${existingAddress ? 'actualizada' : 'guardada'}.\`,
+        description: result.message || `Tu dirección ha sido ${existingAddress ? 'actualizada' : 'guardada'}.`,
       });
       onAddressSavedOrUpdated(); // Llama a la función para recargar las direcciones en el padre
       onOpenChange(false); // Cierra el diálogo
@@ -742,4 +742,3 @@ function AddAddressDialog({
   );
 }
 
-creo que esta bien
