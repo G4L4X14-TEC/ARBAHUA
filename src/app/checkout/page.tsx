@@ -28,7 +28,6 @@ import * as z from "zod";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -64,7 +63,7 @@ export default function CheckoutPage() {
   const [isLoadingCart, setIsLoadingCart] = React.useState(true);
   const [errorCart, setErrorCart] = React.useState<string | null>(null);
   const [shippingData, setShippingData] = React.useState<ShippingFormValues | null>(null);
-  const [isShippingFormValid, setIsShippingFormValid] = React.useState(false);
+  const [isShippingFormValidAndSubmitted, setIsShippingFormValidAndSubmitted] = React.useState(false);
 
 
   React.useEffect(() => {
@@ -119,10 +118,10 @@ export default function CheckoutPage() {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
 
-  const handleShippingSubmit = (data: ShippingFormValues) => {
+  const handleShippingSubmitSuccess = (data: ShippingFormValues) => {
     console.log("Shipping Data Submitted:", data);
     setShippingData(data);
-    // Aquí se podría guardar la dirección o pasarla al siguiente paso
+    setIsShippingFormValidAndSubmitted(true);
     toast({ title: "Información de Envío Guardada", description: "Puedes proceder al pago." });
   };
 
@@ -157,7 +156,6 @@ export default function CheckoutPage() {
   }
 
   if (!isLoadingCart && cartItems.length === 0) {
-     // Esta condición puede que ya no se alcance si fetchCart redirige antes
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -195,13 +193,14 @@ export default function CheckoutPage() {
 
         <section className="lg:col-span-2 space-y-8">
           <ShippingForm 
-            onSubmitSuccess={handleShippingSubmit} 
-            onValidationChange={setIsShippingFormValid}
+            onSubmitSuccess={handleShippingSubmitSuccess}
           />
-          <PaymentSection 
-            isShippingComplete={isShippingFormValid} 
-            shippingValues={shippingData} 
-          />
+          {isShippingFormValidAndSubmitted && shippingData && (
+            <PaymentSection 
+              isShippingComplete={isShippingFormValidAndSubmitted} 
+              shippingValues={shippingData} 
+            />
+          )}
         </section>
       </div>
     </main>
@@ -253,28 +252,22 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
 
 interface ShippingFormProps {
   onSubmitSuccess: (data: ShippingFormValues) => void;
-  onValidationChange: (isValid: boolean) => void;
 }
 
-function ShippingForm({ onSubmitSuccess, onValidationChange }: ShippingFormProps) {
+function ShippingForm({ onSubmitSuccess }: ShippingFormProps) {
   const form = useForm<ShippingFormValues>({
     resolver: zodResolver(shippingFormSchema),
-    mode: "onChange", // Validar en cada cambio para actualizar el estado del botón de pago
+    mode: "onChange", 
     defaultValues: {
       nombreCompleto: "",
       direccion: "",
       ciudad: "",
       codigoPostal: "",
-      pais: "México", // Valor por defecto
+      pais: "México", 
       telefono: "",
     },
   });
 
-  React.useEffect(() => {
-    onValidationChange(form.formState.isValid);
-  }, [form.formState.isValid, onValidationChange]);
-
-  // La función onSubmit ahora solo se llama si el formulario es válido
   const onSubmit = (data: ShippingFormValues) => {
     onSubmitSuccess(data); 
   };
@@ -360,7 +353,6 @@ function ShippingForm({ onSubmitSuccess, onValidationChange }: ShippingFormProps
                     </FormControl>
                     <SelectContent>
                       <SelectItem value="México">México</SelectItem>
-                      {/* Añade más países si es necesario */}
                       {/* <SelectItem value="OtroPaís">OtroPaís</SelectItem> */}
                     </SelectContent>
                   </Select>
@@ -381,11 +373,14 @@ function ShippingForm({ onSubmitSuccess, onValidationChange }: ShippingFormProps
                 </FormItem>
               )}
             />
-            {/* El botón de submit para el formulario de envío es opcional aquí, 
-                ya que el botón principal de "Finalizar Compra" podría validar y tomar estos datos.
-                Por ahora, lo dejamos sin un botón de submit explícito para este sub-formulario.
-                La validación 'onChange' y la llamada a onValidationChange informarán al padre.
-            */}
+             <Button 
+              type="submit" 
+              className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground"
+              disabled={!form.formState.isValid || form.formState.isSubmitting}
+            >
+              {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Guardar Dirección y Continuar al Pago
+            </Button>
           </form>
         </Form>
       </CardContent>
@@ -400,7 +395,7 @@ interface PaymentSectionProps {
 
 function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionProps) {
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
-  const { toast } = useToast(); // Obtener toast aquí
+  const { toast } = useToast();
 
   const handleSimulatePayment = () => {
     if (!isShippingComplete || !shippingValues) {
@@ -424,7 +419,6 @@ function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionPr
         title: "Pago Simulado Exitoso",
         description: "¡Gracias por tu compra (simulada)!",
       });
-      // Aquí podrías redirigir, e.g., router.push('/user-profile/orders');
     }, 2000);
   };
 
@@ -457,4 +451,5 @@ function PaymentSection({ isShippingComplete, shippingValues }: PaymentSectionPr
   );
 }
       
+    
     
