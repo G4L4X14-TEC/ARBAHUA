@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
@@ -14,7 +13,6 @@ export type UserOrderForDisplay = Pick<Tables<'pedidos'>, 'id' | 'total' | 'esta
 };
 
 // Helper para crear el cliente de Supabase en Server Actions
-// Esta función es similar a la de otros archivos de acciones, podrías centralizarla.
 async function createSupabaseServerClientAction() {
   const cookieStore = await cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -183,18 +181,14 @@ export async function updateUserAddressAction(
     return { success: false, message: "Debes iniciar sesión para actualizar una dirección." };
   }
 
-  // Mapeo de ShippingFormValues a TablesUpdate<'direcciones'>
-  // Asegúrate de que los nombres de campo coincidan con tu tabla 'direcciones'
-  // y que los campos de 'addressData' (como nombreCompleto y telefono) tengan columnas correspondientes.
   const updatePayload: TablesUpdate<'direcciones'> = {
     calle: addressData.direccion,
     ciudad: addressData.ciudad,
-    estado: addressData.estado, // Asegúrate de que este campo exista en ShippingFormValues y en tu tabla
-    codigo_postal: addressData.codigoPostal, // Normalizado a 'codigo_postal'
-    pais: addressData.pais,                 // Normalizado a 'pais'
-    // Si tienes estas columnas en tu tabla 'direcciones' y en ShippingFormValues:
-    // nombre_completo_destinatario: addressData.nombreCompleto,
-    // telefono_contacto: addressData.telefono,
+    estado: addressData.estado,
+    codigo_postal: addressData.codigoPostal,
+    pais: addressData.pais,
+    nombre_completo_destinatario: addressData.nombreCompleto, // Asumiendo que existe en ShippingFormValues y en la tabla
+    telefono_contacto: addressData.telefono, // Asumiendo que existe
   };
 
   try {
@@ -202,7 +196,7 @@ export async function updateUserAddressAction(
       .from('direcciones')
       .update(updatePayload)
       .eq('id', addressId)
-      .eq('cliente_id', user.id); // Muy importante para asegurar que el usuario solo actualice sus propias direcciones
+      .eq('cliente_id', user.id); 
 
     if (error) {
       console.error('[updateUserAddressAction] Error updating address:', error.message);
@@ -237,7 +231,7 @@ export async function deleteUserAddressAction(
       .from('direcciones')
       .delete()
       .eq('id', addressId)
-      .eq('cliente_id', user.id); // Muy importante para asegurar que solo elimine sus propias direcciones
+      .eq('cliente_id', user.id); 
 
     if (error) {
       console.error('[deleteUserAddressAction] Error deleting address:', error.message);
@@ -248,7 +242,6 @@ export async function deleteUserAddressAction(
     return { success: true, message: 'Dirección eliminada correctamente.' };
   } catch (e: any) {
     console.error("[deleteUserAddressAction] Critical error:", e.message);
-    // Asegurarse de que el template literal esté correctamente cerrado
     return { success: false, message: \`Error inesperado al eliminar la dirección: \${e.message}\` };
   }
 }

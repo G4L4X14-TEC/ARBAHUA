@@ -1,4 +1,3 @@
-
 "use client"; 
 
 import * as React from "react";
@@ -20,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { 
   Form, 
   FormControl, 
-  FormProvider,
+  FormProvider, // Importado
   FormField, 
   FormItem, 
   FormLabel, 
@@ -78,11 +77,12 @@ import Link from "next/link";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 import { 
   getUserOrdersAction, 
-  getUserAddressesAction, 
-  updateUserAddressAction, 
-  deleteUserAddressAction, 
+  getUserAddressesAction, // Asegúrate que esté exportado e importado
+  updateUserAddressAction, // Asegúrate que esté exportado e importado
+  deleteUserAddressAction, // Asegúrate que esté exportado e importado
   type UserOrderForDisplay 
 } from "@/app/actions/userProfileActions";
 import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
@@ -118,6 +118,7 @@ export default function UserProfilePage() {
   React.useEffect(() => {
     if (searchParams.get("order_success") === "true") {
       setShowOrderSuccessMessage(true);
+      // Opcional: limpiar el parámetro de la URL para que el mensaje no aparezca en recargas
       // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
@@ -140,7 +141,7 @@ export default function UserProfilePage() {
       .single();
 
     if (profileError || !profileData) {
-      toast({ title: "Error de Perfil", description: `No se pudo cargar tu perfil: ${profileError?.message || 'Error desconocido'}`, variant: "destructive" });
+      toast({ title: "Error de Perfil", description: \`No se pudo cargar tu perfil: \${profileError?.message || 'Error desconocido'}\`, variant: "destructive" });
       setProfile(null); 
     } else {
       setProfile(profileData);
@@ -154,15 +155,12 @@ export default function UserProfilePage() {
   
   const fetchOrders = React.useCallback(async () => {
     if (!user || !profile) return;
-    console.log('[UserProfilePage] Fetching orders for user:', user.id);
     setIsLoadingOrders(true);
     setErrorOrders(null);
     try {
       const userOrders = await getUserOrdersAction();
-      console.log('[UserProfilePage] Orders received:', userOrders);
       setOrders(userOrders);
     } catch (err: any) {
-      console.error('[UserProfilePage] Error fetching orders:', err);
       setErrorOrders("No se pudieron cargar tus pedidos.");
       toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
@@ -172,15 +170,12 @@ export default function UserProfilePage() {
 
   const fetchAddresses = React.useCallback(async () => {
     if (!profile) return;
-    console.log('[UserProfilePage] Fetching addresses for user:', profile.id);
     setIsLoadingAddresses(true);
     setErrorAddresses(null);
     try {
       const userAddresses = await getUserAddressesAction();
-      console.log('[UserProfilePage] Addresses received:', userAddresses);
       setAddresses(userAddresses);
     } catch (err: any) {
-      console.error('[UserProfilePage] Error fetching addresses:', err);
       setErrorAddresses("No se pudieron cargar tus direcciones.");
       toast({ title: "Error al Cargar Direcciones", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
@@ -216,13 +211,14 @@ export default function UserProfilePage() {
       case 'Cancelado':
         return 'destructive';
       default:
-        const _exhaustiveCheck: never = status;
+        // Esto ayuda a TypeScript a asegurar que todos los casos estén cubiertos
+        const _exhaustiveCheck: never = status; 
         return 'outline';
     }
   };
 
   const handleOpenAddAddressDialog = () => {
-    setEditingAddress(null); // Asegurarse de que no estamos editando
+    setEditingAddress(null);
     setIsAddressDialogOpen(true);
   };
 
@@ -232,12 +228,11 @@ export default function UserProfilePage() {
   };
   
   const handleAddressSavedOrUpdated = () => {
-    fetchAddresses();
-    setIsAddressDialogOpen(false);
-    setEditingAddress(null);
+    fetchAddresses(); // Recargar direcciones
+    // El cierre del diálogo y limpieza de editingAddress se maneja en onOpenChange del Dialog
   };
 
-  const handleDeleteAddress = (address: Tables<'direcciones'>) => {
+  const handleDeleteAddressClick = (address: Tables<'direcciones'>) => {
     setAddressToDelete(address);
     setIsConfirmDeleteDialogOpen(true);
   };
@@ -247,7 +242,7 @@ export default function UserProfilePage() {
     const result = await deleteUserAddressAction(addressToDelete.id);
     if (result.success) {
       toast({ title: "Dirección Eliminada", description: result.message });
-      fetchAddresses();
+      fetchAddresses(); // Recargar direcciones
     } else {
       toast({ title: "Error al Eliminar", description: result.message, variant: "destructive" });
     }
@@ -265,15 +260,15 @@ export default function UserProfilePage() {
   }
 
   if (!user || !profile) {
+    // La redirección ya ocurre en fetchUserData, pero esto es un fallback.
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle className="text-destructive">Error al Cargar Perfil</CardTitle>
+            <CardTitle className="text-destructive">Error</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>No se pudo cargar la información de tu perfil. Por favor, intenta iniciar sesión de nuevo.</p>
-            <Button onClick={() => router.push('/login?redirect=/user-profile')} className="mt-4 bg-primary hover:bg-primary/90 text-primary-foreground">Ir a Iniciar Sesión</Button>
+            <p>No se pudo cargar la información del perfil. Serás redirigido.</p>
           </CardContent>
         </Card>
       </main>
@@ -400,7 +395,7 @@ export default function UserProfilePage() {
                         <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-muted/30 gap-2">
                           <div>
                             <p className="text-sm font-medium text-foreground">
-                              Pedido <span className="text-primary">#${order.id.substring(0, 8).toUpperCase()}</span>
+                              Pedido <span className="text-primary">#\${order.id.substring(0, 8).toUpperCase()}</span>
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {order.formatted_date}
@@ -412,7 +407,7 @@ export default function UserProfilePage() {
                         </CardHeader>
                         <CardContent className="p-4 space-y-2">
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> MXN${order.total.toFixed(2)}
+                            <span className="font-medium">Total:</span> MXN\${order.total.toFixed(2)}
                           </p>
                           <p className="text-sm text-muted-foreground italic">
                             <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
@@ -444,7 +439,7 @@ export default function UserProfilePage() {
                   Mis Direcciones
                 </CardTitle>
                 <Button size="sm" onClick={handleOpenAddAddressDialog}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Dirección
+                  <PlusCircle className="mr-2 h-4 w-4" /> Añadir Nueva Dirección
                 </Button>
               </CardHeader>
               <CardContent>
@@ -472,7 +467,7 @@ export default function UserProfilePage() {
                           <Button variant="outline" size="sm" onClick={() => handleOpenEditAddressDialog(address)}>
                             <Edit3 className="mr-1 h-3 w-3" /> Editar
                           </Button>
-                          <Button variant="destructive" size="sm" onClick={() => handleDeleteAddress(address)}>
+                          <Button variant="destructive" size="sm" onClick={() => handleDeleteAddressClick(address)}>
                             <Trash2 className="mr-1 h-3 w-3" /> Eliminar
                           </Button>
                         </div>
@@ -493,9 +488,15 @@ export default function UserProfilePage() {
           </section>
         </div>
         
-        <AddressDialog
+        <AddAddressDialog
           isOpen={isAddressDialogOpen}
-          onOpenChange={setIsAddressDialogOpen}
+          onOpenChange={(isOpen) => {
+            setIsAddressDialogOpen(isOpen);
+            if (!isOpen) {
+              console.log("[UserProfilePage] Dialog closed, clearing editingAddress.");
+              setEditingAddress(null); 
+            }
+          }}
           onAddressSavedOrUpdated={handleAddressSavedOrUpdated}
           existingAddress={editingAddress}
         />
@@ -529,32 +530,32 @@ export default function UserProfilePage() {
   );
 }
 
-interface AddressDialogProps {
+interface AddAddressDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onAddressSavedOrUpdated: () => void;
   existingAddress: Tables<'direcciones'> | null;
 }
 
-function AddressDialog({ 
+function AddAddressDialog({ 
   isOpen, 
   onOpenChange, 
   onAddressSavedOrUpdated, 
   existingAddress 
-}: AddressDialogProps) {
+}: AddAddressDialogProps) {
   const { toast } = useToast();
   const [isSubmittingAddress, setIsSubmittingAddress] = React.useState(false);
 
   const formMethods = useForm<ShippingFormValues>({ 
     resolver: zodResolver(shippingFormSchema),
     defaultValues: {
-      nombreCompleto:  "", // Asumiendo que estos no están en 'direcciones' pero sí en el form
+      nombreCompleto:  "", 
       direccion: "",
       ciudad: "",
       estado: "",
       codigoPostal: "",
       pais: "México", 
-      telefono: "", // Asumiendo que estos no están en 'direcciones' pero sí en el form
+      telefono: "", 
     },
   });
 
@@ -570,7 +571,7 @@ function AddressDialog({
         telefono: existingAddress.telefono_contacto || "",
       });
     } else {
-      formMethods.reset({ // Resetear a valores por defecto para un nuevo formulario
+      formMethods.reset({
         nombreCompleto: "",
         direccion: "",
         ciudad: "",
@@ -580,11 +581,11 @@ function AddressDialog({
         telefono: "",
       });
     }
-  }, [existingAddress, formMethods]);
+  }, [existingAddress, formMethods, isOpen]); // Añadir isOpen a las dependencias para resetear cuando se abre para "nuevo"
 
   const handleAddressSubmit = async (data: ShippingFormValues) => {
     setIsSubmittingAddress(true);
-    console.log("[AddressDialog] Submitting address:", data, "Existing Address ID:", existingAddress?.id);
+    console.log("[AddAddressDialog] Submitting address:", data, "Existing Address ID:", existingAddress?.id);
     
     let result;
     if (existingAddress?.id) {
@@ -596,9 +597,10 @@ function AddressDialog({
     if (result.success) {
       toast({
         title: existingAddress ? "Dirección Actualizada" : "Dirección Guardada",
-        description: result.message || `Tu dirección ha sido ${existingAddress ? 'actualizada' : 'guardada'}.`,
+        description: result.message || \`Tu dirección ha sido \${existingAddress ? 'actualizada' : 'guardada'}.\`,
       });
-      onAddressSavedOrUpdated();
+      onAddressSavedOrUpdated(); // Llama a la función para recargar las direcciones en el padre
+      onOpenChange(false); // Cierra el diálogo
     } else {
       toast({
         title: existingAddress ? "Error al Actualizar" : "Error al Guardar",
@@ -610,13 +612,7 @@ function AddressDialog({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open) { // Si se está cerrando el diálogo
-        formMethods.reset(); // Limpiar el formulario
-        setEditingAddress(null); // Asegurar que no quede ninguna dirección en edición
-      }
-      onOpenChange(open);
-    }}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{existingAddress ? 'Editar Dirección' : 'Añadir Nueva Dirección'}</DialogTitle>
@@ -626,7 +622,6 @@ function AddressDialog({
         </DialogHeader>
         <FormProvider {...formMethods}> 
           <form onSubmit={formMethods.handleSubmit(handleAddressSubmit)} className="space-y-4 py-4">
-            {/* Campos del ShippingForm reutilizados */}
             <FormField
               control={formMethods.control}
               name="nombreCompleto"
@@ -709,7 +704,6 @@ function AddressDialog({
                             </FormControl>
                             <SelectContent>
                             <SelectItem value="México">México</SelectItem>
-                            {/* Puedes añadir más países si es necesario */}
                             </SelectContent>
                         </Select>
                         <FormMessage />
@@ -747,3 +741,5 @@ function AddressDialog({
     </Dialog>
   );
 }
+
+creo que esta bien
