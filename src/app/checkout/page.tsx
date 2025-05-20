@@ -4,7 +4,7 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Asegúrate que useSearchParams esté aquí si lo usas
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,18 @@ import {
   ShieldCheck, 
   CreditCard, 
   ChevronLeft, 
-  Home as HomeIcon, 
-  AlertTriangle 
+  Home as HomeIcon,
+  AlertTriangle // Asegúrate que AlertTriangle esté importado si lo usas
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
-import { saveShippingAddressAction, createPaymentIntentAction, createOrderAction } from "@/app/actions/checkoutActions"; 
+import { 
+  saveShippingAddressAction, 
+  createPaymentIntentAction,
+  createOrderAction 
+} from "@/app/actions/checkoutActions"; 
+import { clearCartAction } from "@/app/actions/cartPageActions";
+
 import { 
   useForm, 
   FormProvider, 
@@ -40,13 +46,13 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
-  Form,
+  Form, // Importa Form de react-hook-form o tu alias de ui/form
   FormControl,
   FormField,
   FormItem,
   FormMessage,
   FormLabel,
-} from "@/components/ui/form";
+} from "@/components/ui/form"; // Asegúrate que Form (el alias de FormProvider) esté aquí o FormProvider mismo
 import {
   Select,
   SelectContent,
@@ -69,11 +75,11 @@ export const shippingFormSchema = z.object({
   ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
   estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}),
   codigoPostal: z.string()
-    .transform(val => val.trim()) // Eliminar espacios al inicio y al final
+    .trim() // Aplicar trim antes de regex
     .regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
   pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
   telefono: z.string()
-    .transform(val => val.trim()) // Eliminar espacios al inicio y al final
+    .trim() // Aplicar trim antes de regex
     .regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
 });
 export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
@@ -119,55 +125,43 @@ export default function CheckoutPage() {
   });
 
   React.useEffect(() => {
-    const fetchUser = async () => {
+    const fetchUserAndCart = async () => {
       setIsLoadingUser(true);
+      setIsLoadingCart(true);
+      
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        toast({ title: "Error de Sesión", description: "No se pudo verificar tu sesión.", variant: "destructive" });
-        router.push("/login?redirect=/checkout");
-        return;
-      }
-      if (!session?.user) {
+      if (sessionError || !session?.user) {
         toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para proceder al pago.", variant: "destructive" });
         router.push("/login?redirect=/checkout");
         return;
       }
       setUser(session.user);
       setIsLoadingUser(false);
-    };
-    fetchUser();
-  }, [supabase, router, toast]);
 
-  React.useEffect(() => {
-    if (user && !isLoadingUser) { 
-      const fetchCart = async () => {
-        setIsLoadingCart(true);
-        setErrorCart(null);
-        console.log("[CheckoutPage] Fetching cart items for user:", user.id);
-        try {
-          const items = await getCartItemsAction();
-          console.log("[CheckoutPage] Cart items received:", items);
-          if (items.length === 0 && typeof window !== 'undefined') {
-            toast({ title: "Carrito Vacío", description: "No tienes productos para pagar. Serás redirigido.", variant: "default" });
-            router.push("/cart"); 
-            return;
-          }
-          setCartItems(items);
-        } catch (err: any) {
-          console.error("[CheckoutPage] Error fetching cart items:", err);
-          setErrorCart("No se pudieron cargar los artículos del carrito. Inténtalo de nuevo.");
-          toast({
-            title: "Error al Cargar Carrito",
-            description: err.message || "Ocurrió un problema inesperado.",
-            variant: "destructive",
-          });
-        } finally {
-          setIsLoadingCart(false);
+      console.log("[CheckoutPage] Fetching cart items for user:", session.user.id);
+      try {
+        const items = await getCartItemsAction();
+        console.log("[CheckoutPage] Cart items received:", items);
+        if (items.length === 0 && typeof window !== 'undefined') {
+          toast({ title: "Carrito Vacío", description: "No tienes productos para pagar. Serás redirigido al carrito.", variant: "default" });
+          router.push("/cart"); 
+          return;
         }
-      };
-      fetchCart();
-    }
-  }, [user, isLoadingUser, router, toast]);
+        setCartItems(items);
+      } catch (err: any) {
+        console.error("[CheckoutPage] Error fetching cart items:", err);
+        setErrorCart("No se pudieron cargar los artículos del carrito. Inténtalo de nuevo.");
+        toast({
+          title: "Error al Cargar Carrito",
+          description: err.message || "Ocurrió un problema inesperado.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoadingCart(false);
+      }
+    };
+    fetchUserAndCart();
+  }, [supabase, router, toast]);
 
   React.useEffect(() => {
     if (isShippingFormValidAndSubmitted && paymentSectionRef.current) {
@@ -203,7 +197,7 @@ export default function CheckoutPage() {
     }
   };
 
-  if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0 && !errorCart) ) {
+  if (isLoadingUser || isLoadingCart) {
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -213,6 +207,7 @@ export default function CheckoutPage() {
   }
   
   if (!user) { 
+    // Este caso ya se maneja en el useEffect, pero como fallback
     return null; 
   }
   
@@ -232,17 +227,8 @@ export default function CheckoutPage() {
     );
   }
 
-  if (isLoadingCart) { 
-    return (
-      <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Cargando carrito...</p>
-      </main>
-    );
-  }
-
-  if (!isLoadingCart && cartItems.length === 0 && typeof window !== 'undefined' && window.location.pathname === '/checkout') {
-    // Este chequeo debería ocurrir antes en useEffect, pero como fallback
+  if (cartItems.length === 0 && typeof window !== 'undefined' && window.location.pathname === '/checkout') {
+    // Este chequeo se maneja en useEffect, pero como fallback
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -282,7 +268,7 @@ export default function CheckoutPage() {
           <section className="lg:col-span-2 space-y-8">
             <ShippingForm 
               onSubmitSuccess={handleShippingSubmitSuccess}
-              isSubmittingParent={isSavingAddress || shippingFormMethods.formState.isSubmitting} 
+              isSubmittingParent={isSavingAddress} 
             />
             
             {isShippingFormValidAndSubmitted && shippingData && savedAddressId && cartItems.length > 0 && (
@@ -339,7 +325,7 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
         ))}
         <Separator />
         <div className="flex justify-between font-semibold text-lg">
-          <span>Total:</span>
+          <span>Total ({items.length} {items.length === 1 ? 'artículo' : 'artículos'}):</span>
           <span>MXN\${total.toFixed(2)}</span>
         </div>
       </CardContent>
@@ -353,7 +339,7 @@ interface ShippingFormProps {
 }
 
 function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps) {
-  const form = useFormContext<ShippingFormValues>(); 
+  const form = useFormContext<ShippingFormValues>(); // Usa el contexto del formulario padre
 
   return (
       <Card className="shadow-lg">
@@ -447,7 +433,6 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
                           </FormControl>
                           <SelectContent>
                           <SelectItem value="México">México</SelectItem>
-                          {/* Puedes añadir más países aquí */}
                           </SelectContent>
                       </Select>
                       <FormMessage />
@@ -487,7 +472,7 @@ interface PaymentSectionProps {
   shippingValues: ShippingFormValues; 
   userEmail: string;
   cartItems: CartItemForDisplay[]; 
-  savedAddressId: string; 
+  savedAddressId: string | null; 
   totalAmountInCents: number;
 }
 
@@ -499,7 +484,7 @@ function PaymentSection({
   savedAddressId,
   totalAmountInCents
 }: PaymentSectionProps) {
-  const { toast: pageToast } = useToast(); // Renombrar para evitar conflicto si StripePaymentForm usa su propio toast
+  // const { toast: pageToast } = useToast(); // Renombrar para evitar conflicto si StripePaymentForm usa su propio toast
   
   if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && typeof window !== 'undefined') {
      console.error("Stripe.js no se ha cargado. Clave publicable podría estar faltando.");
@@ -554,7 +539,7 @@ interface StripePaymentFormProps {
   isShippingComplete: boolean;
   userEmail: string;
   cartItems: CartItemForDisplay[];
-  savedAddressId: string;
+  savedAddressId: string | null;
   totalAmountInCents: number;
 }
 
@@ -568,18 +553,18 @@ function StripePaymentForm({
 }: StripePaymentFormProps) {
   const stripe = useStripe();
   const elements = useElements();
-  const { toast } = useToast();
+  const { toast } = useToast(); // Obtener toast del hook
   const router = useRouter(); 
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
   
-  const shippingFormContext = useFormContext<ShippingFormValues>();
+  const shippingFormContext = useFormContext<ShippingFormValues>(); // Acceder al contexto del formulario de envío
 
   const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPaymentError(null);
 
-    if (!isShippingComplete || (shippingFormContext && !shippingFormContext.formState.isValid)) { 
+    if (!isShippingComplete || !shippingFormContext.formState.isValid || !savedAddressId) { 
       toast({ title: "Información Incompleta", description: "Completa y guarda tu dirección de envío antes de pagar.", variant: "destructive" });
       return;
     }
@@ -609,7 +594,7 @@ function StripePaymentForm({
         setIsLoadingPayment(false);
         return;
       }
-      console.log("[StripePaymentForm] Payment Intent creado.");
+      console.log("[StripePaymentForm] Payment Intent creado. Client Secret:", intentResult.clientSecret);
 
       const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
         intentResult.clientSecret,
@@ -617,15 +602,15 @@ function StripePaymentForm({
           payment_method: {
             card: cardElement,
             billing_details: {
-              name: shippingValues.nombreCompleto,
+              name: shippingValues.nombreCompleto ?? '',
               email: userEmail, 
-              phone: shippingValues.telefono,
+              phone: shippingValues.telefono ?? '',
               address: {
-                line1: shippingValues.direccion,
-                city: shippingValues.ciudad,
-                state: shippingValues.estado,
-                postal_code: shippingValues.codigoPostal,
-                country: shippingValues.pais === "México" ? "MX" : shippingValues.pais, 
+                line1: shippingValues.direccion ?? '',
+                city: shippingValues.ciudad ?? '',
+                state: shippingValues.estado ?? '', 
+                postal_code: shippingValues.codigoPostal ?? '',
+                country: shippingValues.pais === "México" ? "MX" : (shippingValues.pais ?? ''), 
               },
             },
           },
@@ -650,16 +635,22 @@ function StripePaymentForm({
         );
 
         if (orderResult.success && orderResult.orderId) {
-          toast({
+           toast({
             title: "¡Pedido Creado Exitosamente!",
             description: `Gracias por tu compra. Tu ID de orden es: ${orderResult.orderId}.`,
             duration: 7000,
           });
+
+          const clearCartResult = await clearCartAction();
+          if (clearCartResult.success) {
+            toast({ title: "Carrito Limpio", description: "Tu carrito ha sido vaciado." });
+          } else {
+            toast({ title: "Advertencia", description: `La orden se creó, pero no se pudo limpiar el carrito: ${clearCartResult.message}`, variant: "default" });
+          }
           router.push('/user-profile?order_success=true'); 
-          // TODO: Limpiar carrito aquí
         } else {
-          setPaymentError(`El pago fue exitoso, pero hubo un problema al registrar tu orden: ${orderResult.message}. Por favor, contacta a soporte.`);
-          toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado, pero no pudimos registrar tu orden. Contacta a soporte con ID de transacción: ${paymentIntent.id}`, variant: "destructive", duration: 10000 });
+          setPaymentError(`El pago fue exitoso, pero hubo un problema al registrar tu orden: ${orderResult.message}. Por favor, contacta a soporte con ID de transacción: ${paymentIntent.id}`);
+          toast({ title: "Error Crítico al Registrar Orden", description: `Tu pago fue procesado (${paymentIntent.id}), pero no pudimos registrar tu orden. Contacta a soporte.`, variant: "destructive", duration: 10000 });
         }
       } else {
         const errorMessage = paymentIntent?.last_payment_error?.message || `Estado del pago: ${paymentIntent?.status}. Por favor, intenta de nuevo.`;
@@ -710,7 +701,7 @@ function StripePaymentForm({
       <Button 
         type="submit"
         className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
-        disabled={isLoadingPayment || !isShippingComplete || !stripe || !elements || (shippingFormContext && !shippingFormContext.formState.isValid)}
+        disabled={isLoadingPayment || !isShippingComplete || !stripe || !elements || !shippingFormContext.formState.isValid}
       >
         {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
         {isLoadingPayment ? 'Procesando Pago...' : 'Finalizar Compra'}
@@ -719,4 +710,5 @@ function StripePaymentForm({
   );
 }
 
-    
+```
+ESTE ES EL CODIGO EN `src/app/checkout/page.tsx` donde tengo el error de cannot find `FormProvider` en las lineas 629 y 630
