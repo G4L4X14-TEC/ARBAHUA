@@ -23,7 +23,7 @@ import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home } fro
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
 
-// Placeholder for ShippingFormValues -  we'll define this properly later
+// Placeholder para ShippingFormValues -  definiremos esto correctamente después
 type ShippingFormValues = {
   nombreCompleto: string;
   direccion: string;
@@ -44,48 +44,52 @@ export default function CheckoutPage() {
   const [isLoadingCart, setIsLoadingCart] = React.useState(true);
   const [errorCart, setErrorCart] = React.useState<string | null>(null);
 
-  // 1. Check user authentication
+  // 1. Verificar autenticación del usuario
   React.useEffect(() => {
     const fetchUser = async () => {
       setIsLoadingUser(true);
+      console.log("[CheckoutPage] Verificando sesión del usuario...");
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
+        console.error("[CheckoutPage] Error al obtener sesión:", sessionError.message);
         toast({ title: "Error de Sesión", description: "No se pudo verificar tu sesión.", variant: "destructive" });
         router.push("/login?redirect=/checkout");
         return;
       }
       if (!session?.user) {
+        console.log("[CheckoutPage] Usuario no autenticado. Redirigiendo a login.");
         toast({ title: "Acceso Denegado", description: "Debes iniciar sesión para proceder al pago.", variant: "destructive" });
         router.push("/login?redirect=/checkout");
         return;
       }
+      console.log("[CheckoutPage] Usuario autenticado:", session.user.id);
       setUser(session.user);
       setIsLoadingUser(false);
     };
     fetchUser();
   }, [supabase, router, toast]);
 
-  // 2. Fetch cart items if user is authenticated
+  // 2. Obtener ítems del carrito si el usuario está autenticado
   React.useEffect(() => {
-    if (user && !isLoadingUser) { // Fetch cart only after user is confirmed
+    if (user && !isLoadingUser) { 
       const fetchCart = async () => {
         setIsLoadingCart(true);
         setErrorCart(null);
         try {
-          console.log("[CheckoutPage] Fetching cart items...");
+          console.log("[CheckoutPage] Obteniendo ítems del carrito...");
           const items = await getCartItemsAction();
-          console.log("[CheckoutPage] Cart items fetched:", items);
+          console.log("[CheckoutPage] Ítems del carrito obtenidos:", items);
           if (items.length === 0) {
-            toast({ title: "Carrito Vacío", description: "No tienes productos en tu carrito para proceder al pago.", variant: "destructive" });
-            router.push("/cart"); // Redirect to cart page, which will show the "empty cart" message
+            toast({ title: "Carrito Vacío", description: "No tienes productos para pagar. Serás redirigido.", variant: "default" });
+            router.push("/cart"); 
             return;
           }
           setCartItems(items);
         } catch (err: any) {
-          console.error("[CheckoutPage] Error fetching cart items:", err);
+          console.error("[CheckoutPage] Error al obtener ítems del carrito:", err);
           setErrorCart("No se pudieron cargar los artículos del carrito. Inténtalo de nuevo.");
           toast({
-            title: "Error al cargar carrito",
+            title: "Error al Cargar Carrito",
             description: err.message || "Ocurrió un problema inesperado.",
             variant: "destructive",
           });
@@ -101,21 +105,17 @@ export default function CheckoutPage() {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
 
+  // Placeholder para la lógica de pago
   const handleProceedToPayment = async (shippingData: ShippingFormValues) => {
-    // Placeholder for actual payment processing
-    console.log("Proceeding to payment with shipping data:", shippingData);
+    console.log("Procediendo al pago con datos de envío (simulación):", shippingData);
     toast({
       title: "Procesando Pago (Simulación)",
       description: "La integración con Stripe se implementará en el siguiente paso.",
     });
-    // In a real scenario:
-    // 1. Create a Payment Intent on your backend with the total amount.
-    // 2. Use Stripe Elements to collect card details and confirm the payment with the Payment Intent client secret.
-    // 3. On successful payment, create the order in your database.
-    // 4. Redirect to a success page or order confirmation.
+    // Aquí iría la lógica para crear PaymentIntent, confirmar pago con Stripe, crear orden en BD, etc.
   };
 
-  if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0) ) {
+  if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0)) {
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -124,8 +124,9 @@ export default function CheckoutPage() {
     );
   }
   
-  if (!user) { // Should be caught by useEffect, but as a fallback
-    return null; // Or a more specific message, but useEffect handles redirect
+  // Este caso debería ser manejado por el useEffect que redirige si no hay usuario
+  if (!user) { 
+    return null; 
   }
   
   if (errorCart) {
@@ -141,9 +142,28 @@ export default function CheckoutPage() {
           </CardContent>
         </Card>
       </main>
-    )
+    );
   }
 
+  // Este caso debería ser manejado por el useEffect que redirige si el carrito está vacío
+  if (!isLoadingCart && cartItems.length === 0) {
+    return (
+        <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
+         <Card className="w-full max-w-md">
+           <CardHeader>
+             <ShoppingCart className="h-12 w-12 mx-auto text-primary mb-4" />
+             <CardTitle className="text-2xl">Tu carrito está vacío</CardTitle>
+             <CardDescription>Añade algunos productos antes de proceder al pago.</CardDescription>
+           </CardHeader>
+           <CardContent>
+             <Button asChild className="mt-4">
+               <Link href="/search">Explorar Productos</Link>
+             </Button>
+           </CardContent>
+         </Card>
+       </main>
+    );
+  }
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -173,7 +193,7 @@ export default function CheckoutPage() {
   );
 }
 
-// --- Componentes Internos (Placeholders o Simplificados) ---
+// --- Componentes Internos ---
 
 interface OrderSummaryProps {
   items: CartItemForDisplay[];
@@ -189,19 +209,19 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
       <CardContent className="space-y-3">
         {items.map((item) => (
           <div key={item.productos.id} className="flex justify-between items-center text-sm">
-            <div className="flex items-center gap-2">
-              <div className="relative w-10 h-10 rounded overflow-hidden bg-muted shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="relative w-12 h-12 rounded overflow-hidden bg-muted shrink-0">
                 <Image
                   src={item.imagen_url}
                   alt={item.productos.nombre}
                   fill
-                  sizes="40px"
+                  sizes="48px"
                   style={{ objectFit: "cover" }}
                   data-ai-hint="cart item checkout"
                 />
               </div>
               <div>
-                <p className="font-medium text-foreground truncate max-w-[150px] sm:max-w-xs" title={item.productos.nombre}>{item.productos.nombre}</p>
+                <p className="font-medium text-foreground truncate max-w-[150px] sm:max-w-[200px]" title={item.productos.nombre}>{item.productos.nombre}</p>
                 <p className="text-xs text-muted-foreground">Cantidad: {item.cantidad}</p>
               </div>
             </div>
@@ -209,6 +229,7 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
           </div>
         ))}
         <Separator />
+        {/* Aquí podrías añadir costos de envío, impuestos, etc. */}
         <div className="flex justify-between font-semibold text-lg">
           <span>Total:</span>
           <span>MXN${total.toFixed(2)}</span>
@@ -223,50 +244,51 @@ interface ShippingFormProps {
 }
 
 function ShippingForm({ onSubmit }: ShippingFormProps) {
-  // Placeholder: en un futuro, usar react-hook-form y Zod para validación
+  // Placeholder: En un futuro, usar react-hook-form y Zod para validación
   const [formData, setFormData] = React.useState<ShippingFormValues>({
     nombreCompleto: '',
-    direccion: '',
+    direccion: '', // Calle, Número, Colonia, etc.
     ciudad: '',
     codigoPostal: '',
-    pais: 'México', // Default
+    pais: 'México', // Valor por defecto
     telefono: ''
   });
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
   
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Aquí iría la validación antes de llamar a onSubmit
-    onSubmit(formData);
-  }
+  // El botón de "Pagar" se moverá a la sección de pago o será un botón general
+  // Por ahora, este formulario no tiene un botón de envío propio.
+  // La lógica de submit se llamará desde un botón más global en PaymentSection.
 
   return (
     <Card className="shadow-lg">
       <CardHeader>
-        <CardTitle className="text-xl text-earthy-green">Información de Envío</CardTitle>
+        <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
+         <Home className="h-5 w-5" /> Información de Envío
+        </CardTitle>
         <CardDescription>Ingresa los detalles para la entrega de tu pedido.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form className="space-y-4"> {/* No necesita onSubmit aquí todavía */}
           <div>
             <Label htmlFor="nombreCompleto">Nombre Completo</Label>
-            <Input id="nombreCompleto" name="nombreCompleto" value={formData.nombreCompleto} onChange={handleChange} required />
+            <Input id="nombreCompleto" name="nombreCompleto" value={formData.nombreCompleto} onChange={handleChange} required placeholder="Juan Pérez Rodríguez"/>
           </div>
           <div>
-            <Label htmlFor="direccion">Dirección (Calle y Número, Colonia)</Label>
-            <Input id="direccion" name="direccion" value={formData.direccion} onChange={handleChange} required />
+            <Label htmlFor="direccion">Dirección (Calle y Número, Colonia, Referencias)</Label>
+            <Input id="direccion" name="direccion" value={formData.direccion} onChange={handleChange} required placeholder="Av. Siempre Viva 742, Col. Springfield"/>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="ciudad">Ciudad</Label>
-              <Input id="ciudad" name="ciudad" value={formData.ciudad} onChange={handleChange} required />
+              <Input id="ciudad" name="ciudad" value={formData.ciudad} onChange={handleChange} required placeholder="Ciudad de México"/>
             </div>
             <div>
               <Label htmlFor="codigoPostal">Código Postal</Label>
-              <Input id="codigoPostal" name="codigoPostal" value={formData.codigoPostal} onChange={handleChange} required />
+              <Input id="codigoPostal" name="codigoPostal" value={formData.codigoPostal} onChange={handleChange} required placeholder="01234"/>
             </div>
           </div>
            <div>
@@ -274,10 +296,9 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
             <Input id="pais" name="pais" value={formData.pais} onChange={handleChange} required />
           </div>
           <div>
-            <Label htmlFor="telefono">Teléfono de Contacto</Label>
-            <Input id="telefono" name="telefono" type="tel" value={formData.telefono} onChange={handleChange} required />
+            <Label htmlFor="telefono">Teléfono de Contacto (10 dígitos)</Label>
+            <Input id="telefono" name="telefono" type="tel" value={formData.telefono} onChange={handleChange} required placeholder="5512345678"/>
           </div>
-          {/* El botón de pago se moverá a la sección de pago o será un botón general al final */}
         </form>
       </CardContent>
     </Card>
@@ -285,9 +306,27 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
 }
 
 function PaymentSection() {
-  // El botón "Finalizar Compra" ahora estaría aquí o al final del formulario de envío
-  // si queremos un solo botón para todo el proceso antes de ir a Stripe.
-  // Por ahora, solo el placeholder.
+  // El botón "Finalizar Compra" estará aquí.
+  // Cuando se integre Stripe, este componente manejará Stripe Elements.
+  const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
+
+  const handleSimulatePayment = () => {
+    setIsLoadingPayment(true);
+    // Aquí se obtendrían los datos de ShippingForm
+    // y se llamaría a la función de pago (que ahora es un placeholder)
+    // const shippingData = ... (necesitaríamos una forma de obtener los datos del form de envío)
+    // await handleProceedToPayment(shippingData); 
+    console.log("Simulando envío de pago...");
+    toast({
+      title: "Procesando Pago (Simulación)",
+      description: "La integración real con Stripe se implementará después.",
+    });
+    setTimeout(() => {
+      setIsLoadingPayment(false);
+      // Aquí podría haber una redirección o un mensaje de éxito/error.
+    }, 2000);
+  };
+
   return (
     <Card className="shadow-lg">
       <CardHeader>
@@ -296,26 +335,25 @@ function PaymentSection() {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="bg-muted/50 p-6 rounded-md text-center">
-          <ShieldCheck className="h-10 w-10 text-primary mx-auto mb-3" />
+        <div className="bg-muted/50 p-6 rounded-md text-center space-y-3">
+          <ShieldCheck className="h-10 w-10 text-primary mx-auto" />
           <p className="text-muted-foreground">
             Aquí se integrarán los elementos seguros de Stripe para ingresar los datos de tu tarjeta.
           </p>
-          <p className="text-xs text-muted-foreground mt-2">¡Tu pago será procesado de forma segura!</p>
+          <p className="text-xs text-muted-foreground">¡Tu pago será procesado de forma segura!</p>
         </div>
          <Button 
-            type="submit" // Este submit debería ser del formulario general de checkout si combinamos
+            type="button" // Cambiado de submit
             className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
-            // onClick={() => handleProceedToPayment(formData)} // Esta lógica se movería
-            // disabled={isLoadingPayment} // Necesitaríamos un estado para esto
+            onClick={handleSimulatePayment}
+            disabled={isLoadingPayment}
           >
-            {/* {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null} */}
+            {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
             Finalizar Compra (Simulación)
           </Button>
       </CardContent>
     </Card>
   );
 }
-
 
     
