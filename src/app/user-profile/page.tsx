@@ -28,7 +28,9 @@ import {
   AlertTriangle,
   MapPin,
   Settings,
-  KeyRound
+  KeyRound,
+  Edit3,
+  PlusCircle 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/lib/supabase/database.types";

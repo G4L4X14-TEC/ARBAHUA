@@ -1,9 +1,10 @@
+
 "use client";
 
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation"; // Importado para la redirección
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -18,11 +19,24 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home as HomeIcon, AlertTriangle } from "lucide-react";
+import { 
+  Loader2, 
+  ShoppingCart, 
+  ShieldCheck, 
+  CreditCard, 
+  ChevronLeft, 
+  Home as HomeIcon, 
+  AlertTriangle 
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemsAction, type CartItemForDisplay, clearCartAction } from "@/app/actions/cartPageActions";
 import { saveShippingAddressAction, createPaymentIntentAction, createOrderAction } from "@/app/actions/checkoutActions"; 
-import { useForm, FormProvider, useFormContext } from "react-hook-form";
+import { 
+  useForm, 
+  FormProvider, 
+  useFormContext, 
+  type SubmitHandler 
+} from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import {
@@ -49,14 +63,15 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 
-const shippingFormSchema = z.object({
+// Exportar el esquema y el tipo para reutilización
+export const shippingFormSchema = z.object({
   nombreCompleto: z.string().min(3, { message: "El nombre completo debe tener al menos 3 caracteres." }),
   direccion: z.string().min(5, { message: "La dirección debe tener al menos 5 caracteres." }),
   ciudad: z.string().min(2, { message: "La ciudad debe tener al menos 2 caracteres." }),
-  estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}), // Añadido estado
-  codigoPostal: z.string().regex(/^d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }),
+  estado: z.string().min(2, {message: "El estado debe tener al menos 2 caracteres."}),
+  codigoPostal: z.string().regex(/^\d{5}$/, { message: "Debe ser un código postal mexicano válido de 5 dígitos." }), // Ejemplo para México
   pais: z.string({ required_error: "Por favor, selecciona un país." }).min(1, "Por favor, selecciona un país."),
-  telefono: z.string().regex(/^d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }),
+  telefono: z.string().regex(/^\d{10}$/, { message: "Debe ser un número de teléfono de 10 dígitos." }), // Ejemplo para México
 });
 export type ShippingFormValues = z.infer<typeof shippingFormSchema>;
 
@@ -86,7 +101,7 @@ export default function CheckoutPage() {
   
   const paymentSectionRef = React.useRef<HTMLDivElement>(null); 
   
-  const shippingForm = useForm<ShippingFormValues>({
+  const shippingFormMethods = useForm<ShippingFormValues>({
     resolver: zodResolver(shippingFormSchema),
     mode: "onChange", 
     defaultValues: {
@@ -161,7 +176,7 @@ export default function CheckoutPage() {
     return cartItems.reduce((total, item) => total + item.subtotal, 0);
   };
 
-  const handleShippingSubmitSuccess = async (data: ShippingFormValues) => {
+  const handleShippingSubmitSuccess: SubmitHandler<ShippingFormValues> = async (data) => {
     console.log("[CheckoutPage] Shipping Data Submitted:", data);
     setIsSavingAddress(true);
     try {
@@ -259,11 +274,11 @@ export default function CheckoutPage() {
           <OrderSummary items={cartItems} total={calculateTotal()} />
         </section>
         
-        <FormProvider {...shippingForm}>
+        <FormProvider {...shippingFormMethods}>
           <section className="lg:col-span-2 space-y-8">
             <ShippingForm 
               onSubmitSuccess={handleShippingSubmitSuccess}
-              isSubmittingParent={isSavingAddress || shippingForm.formState.isSubmitting} 
+              isSubmittingParent={isSavingAddress} 
             />
             
             {isShippingFormValidAndSubmitted && shippingData && savedAddressId && cartItems.length > 0 && (
@@ -329,19 +344,12 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
 }
 
 interface ShippingFormProps {
-  onSubmitSuccess: (data: ShippingFormValues) => void;
+  onSubmitSuccess: SubmitHandler<ShippingFormValues>; // Usar SubmitHandler para el tipado correcto
   isSubmittingParent: boolean; 
 }
 
 function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps) {
   const form = useFormContext<ShippingFormValues>(); 
-  const { toast } = useToast(); // Para mostrar toasts si es necesario directamente aquí
-
-  const processForm = (data: ShippingFormValues) => {
-    // Aquí podrías hacer una última validación o transformación antes de llamar a onSubmitSuccess
-    console.log("ShippingForm data being processed:", data);
-    onSubmitSuccess(data); 
-  };
 
   return (
     <Card className="shadow-lg">
@@ -352,8 +360,7 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
         <CardDescription>Ingresa los detalles para la entrega de tu pedido.</CardDescription>
       </CardHeader>
       <CardContent>
-        {/* <Form {...form}> No es necesario si ya está envuelto en FormProvider */}
-          <form onSubmit={form.handleSubmit(processForm)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmitSuccess)} className="space-y-4">
             <FormField
               control={form.control}
               name="nombreCompleto"
@@ -460,13 +467,12 @@ function ShippingForm({ onSubmitSuccess, isSubmittingParent }: ShippingFormProps
              <Button 
               type="submit" 
               className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground"
-              disabled={!form.formState.isValid || isSubmittingParent || form.formState.isSubmitting }
+              disabled={!form.formState.isValid || form.formState.isSubmitting || isSubmittingParent }
             >
-              {isSubmittingParent || form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {form.formState.isSubmitting || isSubmittingParent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Guardar Dirección y Continuar al Pago
             </Button>
           </form>
-        {/* </Form> */}
       </CardContent>
     </Card>
   );
@@ -489,7 +495,7 @@ function PaymentSection({
   savedAddressId,
   totalAmountInCents
 }: PaymentSectionProps) {
-  // const { toast } = useToast(); // Obtener toast aquí si es necesario en StripePaymentForm
+  const { toast } = useToast(); // Mover useToast aquí si se necesita en StripePaymentForm
 
   if (!stripePromise && typeof window !== 'undefined') {
      console.error("Stripe.js no se ha cargado. Clave publicable podría estar faltando.");
@@ -559,16 +565,17 @@ function StripePaymentForm({
   const stripe = useStripe();
   const elements = useElements();
   const { toast } = useToast();
-  const router = useRouter(); // Para la redirección
+  const router = useRouter(); 
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
   const [paymentError, setPaymentError] = React.useState<string | null>(null);
-  // const shippingFormContext = useFormContext<ShippingFormValues>(); // No es necesario aquí directamente
+  
+  const shippingFormContext = useFormContext<ShippingFormValues>(); // Acceder al contexto del formulario de envío
 
   const handleSubmitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPaymentError(null);
 
-    if (!isShippingComplete) { 
+    if (!isShippingComplete || !shippingFormContext.formState.isValid) { 
       toast({ title: "Información Incompleta", description: "Completa y guarda tu dirección de envío antes de pagar.", variant: "destructive" });
       return;
     }
@@ -609,7 +616,7 @@ function StripePaymentForm({
         intentResult.clientSecret,
         {
           payment_method: {
-            card: cardElement as StripeCardElement, // Asegurar tipo
+            card: cardElement as StripeCardElement,
             billing_details: {
               name: shippingValues.nombreCompleto,
               email: userEmail, 
@@ -640,9 +647,9 @@ function StripePaymentForm({
         console.log("[StripePaymentForm] 3. Creando orden en la base de datos...");
         const orderResult = await createOrderAction(
           cartItems, 
-          savedAddressId, // Asegúrate que savedAddressId se esté pasando correctamente
+          savedAddressId,
           paymentIntent.id, 
-          paymentIntent.amount // El monto ya está en centavos desde el PaymentIntent
+          paymentIntent.amount 
         );
 
         if (orderResult.success && orderResult.orderId) {
@@ -716,7 +723,7 @@ function StripePaymentForm({
       <Button 
         type="submit"
         className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
-        disabled={isLoadingPayment || !isShippingComplete || !stripe || !elements} 
+        disabled={isLoadingPayment || !isShippingComplete || !stripe || !elements || !shippingFormContext.formState.isValid} // También deshabilita si el form de envío no es válido
       >
         {isLoadingPayment ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CreditCard className="mr-2 h-5 w-5" />}
         {isLoadingPayment ? 'Procesando Pago...' : 'Finalizar Compra'}
@@ -724,3 +731,6 @@ function StripePaymentForm({
     </form>
   );
 }
+
+```
+Este es el código actual, veo que el error que tenías antes ya no está, ¿qué podemos hacer para mejorarlo?

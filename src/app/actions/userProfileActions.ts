@@ -9,10 +9,11 @@ import { es } from 'date-fns/locale';
 
 export type UserOrderForDisplay = Pick<Tables<'pedidos'>, 'id' | 'total' | 'estado' | 'fecha_pedido'> & {
   formatted_date: string;
-  items_summary: string; // Por ahora, un resumen simple como el nombre del primer producto.
+  items_summary: string; 
 };
 
 // Helper para crear el cliente de Supabase en Server Actions
+// Esta función es similar a la de otros archivos de acciones, podrías centralizarla.
 async function createSupabaseServerClientAction() {
   const cookieStore = await cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -90,11 +91,13 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
 
     const displayedOrders: UserOrderForDisplay[] = ordersData.map(order => {
       let itemsSummary = 'Múltiples productos';
-      if (order.detalle_pedido && order.detalle_pedido.length > 0) {
-        // Tipo explícito para el primer item del detalle
-        const firstDetailItem = order.detalle_pedido[0] as { productos: { nombre: string } | null, cantidad: number };
+      // Aseguramos que detalle_pedido es un array antes de accederlo
+      const detalleArray = Array.isArray(order.detalle_pedido) ? order.detalle_pedido : [];
+
+      if (detalleArray.length > 0) {
+        const firstDetailItem = detalleArray[0] as unknown as { productos: { nombre: string } | null, cantidad: number }; // Type assertion
         if (firstDetailItem && firstDetailItem.productos) {
-          itemsSummary = `${firstDetailItem.productos.nombre}${order.detalle_pedido.length > 1 ? ' y más...' : ''}`;
+          itemsSummary = `${firstDetailItem.productos.nombre}${detalleArray.length > 1 ? ' y más...' : ''}`;
         } else {
           itemsSummary = 'Detalles del producto no disponibles';
         }
@@ -120,4 +123,39 @@ export async function getUserOrdersAction(): Promise<UserOrderForDisplay[]> {
     return [];
   }
 }
-    
+
+export async function getUserAddressesAction(): Promise<Tables<'direcciones'>[]> {
+  console.log('[getUserAddressesAction] Attempting to fetch user addresses.');
+  const supabase = await createSupabaseServerClientAction();
+  if (!supabase) {
+    console.error("[getUserAddressesAction] Supabase client not initialized.");
+    return [];
+  }
+
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    console.error('[getUserAddressesAction] User not authenticated or error fetching user:', userError?.message);
+    return [];
+  }
+  console.log('[getUserAddressesAction] Fetching addresses for User ID:', user.id);
+
+  try {
+    const { data: addressesData, error: addressesError } = await supabase
+      .from('direcciones')
+      .select('*')
+      .eq('cliente_id', user.id)
+      .order('calle', { ascending: true }); // O cualquier otro orden que prefieras
+
+    if (addressesError) {
+      console.error('[getUserAddressesAction] Error fetching addresses:', addressesError.message);
+      return [];
+    }
+
+    if (!addressesData) {
+      console.log('[getUserAddressesAction] No addresses found for user:', user.id);
+      return [];
+    }
+
+    console.log(`[getUserAddressesAction] Fetched ${addressesData.length} addresses.`);
+    return addressesData;
+
