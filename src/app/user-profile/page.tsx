@@ -767,5 +767,3 @@ export default function UserProfilePage() {
     </Suspense>
   );
 }
-```
-este es el codigo completo de mi user-profile
