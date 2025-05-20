@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, ShoppingCart, ShieldCheck, CreditCard, ChevronLeft, Home } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; // Import principal de useToast
 import { getCartItemsAction, type CartItemForDisplay } from "@/app/actions/cartPageActions";
 
 // Placeholder para ShippingFormValues -  definiremos esto correctamente después
@@ -36,7 +36,7 @@ type ShippingFormValues = {
 export default function CheckoutPage() {
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
-  const { toast } = useToast();
+  const { toast } = useToast(); // toast está disponible en el scope de CheckoutPage
   
   const [user, setUser] = React.useState<User | null>(null);
   const [isLoadingUser, setIsLoadingUser] = React.useState(true);
@@ -107,15 +107,13 @@ export default function CheckoutPage() {
 
   // Placeholder para la lógica de pago
   const handleProceedToPayment = async (shippingData: ShippingFormValues) => {
+    // Esta función ahora se llamará desde PaymentSection
     console.log("Procediendo al pago con datos de envío (simulación):", shippingData);
-    toast({
-      title: "Procesando Pago (Simulación)",
-      description: "La integración con Stripe se implementará en el siguiente paso.",
-    });
     // Aquí iría la lógica para crear PaymentIntent, confirmar pago con Stripe, crear orden en BD, etc.
+    // Por ahora, el toast se maneja dentro de PaymentSection
   };
 
-  if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0)) {
+  if (isLoadingUser || (user && isLoadingCart && cartItems.length === 0 && !errorCart) ) {
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -124,7 +122,6 @@ export default function CheckoutPage() {
     );
   }
   
-  // Este caso debería ser manejado por el useEffect que redirige si no hay usuario
   if (!user) { 
     return null; 
   }
@@ -145,8 +142,8 @@ export default function CheckoutPage() {
     );
   }
 
-  // Este caso debería ser manejado por el useEffect que redirige si el carrito está vacío
   if (!isLoadingCart && cartItems.length === 0) {
+    // Este caso ya está cubierto por el useEffect que redirige, pero como salvaguarda.
     return (
         <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background text-center">
          <Card className="w-full max-w-md">
@@ -185,8 +182,15 @@ export default function CheckoutPage() {
 
         {/* Columna de Envío y Pago */}
         <section className="lg:col-span-2 space-y-8">
-          <ShippingForm onSubmit={handleProceedToPayment} />
-          <PaymentSection />
+          {/* ShippingForm podría necesitar acceso a los datos del formulario para pasarlos a handleProceedToPayment */}
+          {/* Por ahora, lo mantenemos simple. En una implementación real, usaríamos react-hook-form aquí. */}
+          <ShippingForm onSubmit={() => { /* Lógica futura o estado gestionado globalmente */}} />
+          <PaymentSection 
+            // Si ShippingForm y PaymentSection necesitan coordinarse, 
+            // el estado del formulario de envío debería vivir en CheckoutPage
+            // y pasarse a handleProceedToPayment desde aquí.
+            // onProcessPayment={handleProceedToPayment} 
+          />
         </section>
       </div>
     </main>
@@ -229,7 +233,6 @@ function OrderSummary({ items, total }: OrderSummaryProps) {
           </div>
         ))}
         <Separator />
-        {/* Aquí podrías añadir costos de envío, impuestos, etc. */}
         <div className="flex justify-between font-semibold text-lg">
           <span>Total:</span>
           <span>MXN${total.toFixed(2)}</span>
@@ -244,24 +247,22 @@ interface ShippingFormProps {
 }
 
 function ShippingForm({ onSubmit }: ShippingFormProps) {
-  // Placeholder: En un futuro, usar react-hook-form y Zod para validación
   const [formData, setFormData] = React.useState<ShippingFormValues>({
     nombreCompleto: '',
-    direccion: '', // Calle, Número, Colonia, etc.
+    direccion: '',
     ciudad: '',
     codigoPostal: '',
-    pais: 'México', // Valor por defecto
+    pais: 'México', 
     telefono: ''
   });
-  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
   
-  // El botón de "Pagar" se moverá a la sección de pago o será un botón general
-  // Por ahora, este formulario no tiene un botón de envío propio.
-  // La lógica de submit se llamará desde un botón más global en PaymentSection.
+  // En una implementación completa, este formulario tendría su propio botón de "Guardar Dirección" 
+  // o los datos se pasarían al componente padre para ser usados en el proceso de pago.
+  // Por ahora, no tiene un botón de envío propio.
 
   return (
     <Card className="shadow-lg">
@@ -272,7 +273,7 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
         <CardDescription>Ingresa los detalles para la entrega de tu pedido.</CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-4"> {/* No necesita onSubmit aquí todavía */}
+        <form className="space-y-4">
           <div>
             <Label htmlFor="nombreCompleto">Nombre Completo</Label>
             <Input id="nombreCompleto" name="nombreCompleto" value={formData.nombreCompleto} onChange={handleChange} required placeholder="Juan Pérez Rodríguez"/>
@@ -305,25 +306,35 @@ function ShippingForm({ onSubmit }: ShippingFormProps) {
   );
 }
 
-function PaymentSection() {
-  // El botón "Finalizar Compra" estará aquí.
-  // Cuando se integre Stripe, este componente manejará Stripe Elements.
+// Podríamos pasar onProcessPayment como prop si necesitamos que llame a handleProceedToPayment del componente padre
+// interface PaymentSectionProps {
+//   onProcessPayment: (shippingData: ShippingFormValues) => Promise<void>;
+// }
+
+function PaymentSection(/* { onProcessPayment }: PaymentSectionProps */) {
   const [isLoadingPayment, setIsLoadingPayment] = React.useState(false);
+  const { toast } = useToast(); // Llamar a useToast aquí
 
   const handleSimulatePayment = () => {
     setIsLoadingPayment(true);
-    // Aquí se obtendrían los datos de ShippingForm
-    // y se llamaría a la función de pago (que ahora es un placeholder)
-    // const shippingData = ... (necesitaríamos una forma de obtener los datos del form de envío)
-    // await handleProceedToPayment(shippingData); 
+    // En una implementación real, aquí obtendrías los datos del formulario de envío (ShippingForm)
+    // y los pasarías a una función que maneje la creación del PaymentIntent, etc.
+    // const shippingDataFromForm = ... (necesitaríamos estado compartido o react-hook-form a nivel de CheckoutPage)
+    // await onProcessPayment(shippingDataFromForm); 
+    
     console.log("Simulando envío de pago...");
-    toast({
+    toast({ // Ahora 'toast' está definido en este scope
       title: "Procesando Pago (Simulación)",
       description: "La integración real con Stripe se implementará después.",
     });
     setTimeout(() => {
       setIsLoadingPayment(false);
       // Aquí podría haber una redirección o un mensaje de éxito/error.
+      toast({
+        title: "Pago Simulado Exitoso",
+        description: "¡Gracias por tu compra (simulada)!",
+      });
+      // router.push('/user-profile/orders'); // Ejemplo de redirección
     }, 2000);
   };
 
@@ -343,7 +354,7 @@ function PaymentSection() {
           <p className="text-xs text-muted-foreground">¡Tu pago será procesado de forma segura!</p>
         </div>
          <Button 
-            type="button" // Cambiado de submit
+            type="button"
             className="w-full mt-6 bg-primary hover:bg-primary/90 text-primary-foreground text-lg py-3"
             onClick={handleSimulatePayment}
             disabled={isLoadingPayment}
