@@ -16,65 +16,55 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Mail, Lock, User, Briefcase } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+
+const roleOptions = [
+  { value: 'cliente', label: 'Cliente' },
+  { value: 'artesano', label: 'Artesano' },
+];
 
 const formSchema = z.object({
-  nombre: z.string().min(2, { message: "El nombre completo debe tener al menos 2 caracteres." }),
-  email: z.string().email({ message: "Por favor, introduce un email válido." }),
-  password: z.string().min(6, { message: "La contraseña debe tener al menos 6 caracteres." }),
-  confirmPassword: z.string(),
-  role: z.enum(["cliente", "artesano"], { required_error: "Debes seleccionar un rol." }),
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Las contraseñas no coinciden.",
-  path: ["confirmPassword"],
+  nombre: z.string().min(2, {
+    message: "El nombre debe tener al menos 2 caracteres.",
+  }),
+  email: z.string().email({
+    message: "Correo electrónico inválido.",
+  }),
+  password: z.string().min(8, {
+    message: "La contraseña debe tener al menos 8 caracteres.",
+  }),
+  role: z.enum(['cliente', 'artesano']),
 });
 
-type RegisterFormValues = z.infer<typeof formSchema>;
+interface RegisterFormValues extends z.infer<typeof formSchema> {}
 
 export function RegisterForm() {
   const router = useRouter();
   const { toast } = useToast();
-  const supabase = createSupabaseBrowserClient();
-  const [isLoading, setIsLoading] = React.useState(false);
-
+  const [isLoading, setIsLoading] = useState(false);
+  const supabase = createClientComponentClient()
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       nombre: "",
       email: "",
       password: "",
-      confirmPassword: "",
-      role: undefined,
+      role: "cliente",
     },
   });
 
   async function onSubmit(values: RegisterFormValues) {
     setIsLoading(true);
     try {
-      // Log the exact values before the Supabase call
- console.log("Attempting registration with payload:", {
- email: values.email, // Log email
- password: values.password, // Log password
- nombre: values.nombre, // Log nombre
- role: values.role, // Log role
-      });
-
-      const { error } = await supabase.auth.signUp({
+      const { data: authData, error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
         options: {
           data: {
-            nombre: values.nombre, // Changed from full_name to nombre
+            nombre: values.nombre,
             rol: values.role,
           },
         },
@@ -84,23 +74,37 @@ export function RegisterForm() {
         throw error;
       }
 
-      toast({
-        title: "¡Registro Exitoso!",
-        description: "Tu cuenta ha sido creada. Revisa tu email para confirmar.", 
-      });
+      // Get the user ID from the authData
+      const userId = authData.user?.id;
 
-      // Role-based redirection
-      if (values.role === "artesano") {
-        router.push("/artisan-dashboard");
-      } else {
-        router.push("/"); // Redirect to HomePage for 'cliente'
+      if (!userId) {
+        throw new Error("No se pudo obtener el ID del usuario después del registro.");
       }
 
-    } catch (error: any) {
+      // Now, insert the user data into the public.usuarios table
+      // Include the user ID in the data payload
+      const { error: userError } = await supabase
+        .from("usuarios")
+        .insert([{
+          id: userId, // Include the user ID here
+          nombre: values.nombre,
+          email: values.email,
+          rol: values.role,
+        }]);
+
+      if (userError) {
+        throw userError;
+      }
+
       toast({
+        title: "¡Registro Exitoso!",
+        description: "Tu cuenta ha sido creada. Revisa tu email para confirmar.",
+      });
+    } catch (error:any) {
+      toast({
+        title: "Error al registrarse",
+        description: error.message,
         variant: "destructive",
-        title: "Error en el Registro",
-        description: error.message || "Ocurrió un error al crear tu cuenta. Por favor, inténtalo de nuevo.",
       });
     } finally {
       setIsLoading(false);
@@ -108,118 +112,73 @@ export function RegisterForm() {
   }
 
   return (
-    <Card className="w-full max-w-md shadow-xl bg-card">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center text-primary">Regístrate en Arbahua</CardTitle>
-        <CardDescription className="text-center text-muted-foreground">
-          Crea tu cuenta para empezar a explorar o vender artesanías.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <FormField
-              control={form.control}
-              name="nombre"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre completo</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input placeholder="Tu nombre completo" {...field} className="pl-10" />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input type="email" placeholder="tu@email.com" {...field} className="pl-10" />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Contraseña</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input type="password" placeholder="••••••••" {...field} className="pl-10" />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirmar contraseña</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input type="password" placeholder="••••••••" {...field} className="pl-10" />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quiero ser</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <div className="relative">
-                         <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <SelectTrigger className="pl-10">
-                          <SelectValue placeholder="Selecciona tu rol" />
-                        </SelectTrigger>
-                      </div>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="cliente">Cliente</SelectItem>
-                      <SelectItem value="artesano">Artesano</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isLoading}>
-              {isLoading ? "Registrando..." : "Crear Cuenta"}
-            </Button>
-          </form>
-        </Form>
-      </CardContent>
-      <CardFooter className="flex justify-center">
-        <p className="text-sm text-muted-foreground">
-          ¿Ya tienes cuenta?{' '}
-          <Link href="/login" className="font-medium text-primary hover:underline">
-            Inicia sesión
-          </Link>
-        </p>
-      </CardFooter>
-    </Card>
-  );
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="w-full space-y-6">
+        <FormField
+          control={form.control}
+          name="nombre"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Nombre</FormLabel>
+              <FormControl>
+                <Input placeholder="José Marin" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Correo Electrónico</FormLabel>
+              <FormControl>
+                <Input placeholder="artesano@gmail.com" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Contraseña</FormLabel>
+              <FormControl>
+                <Input type="password" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="role"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Rol</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un rol" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {roleOptions.map((role) => (
+                    <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button disabled={isLoading} type="submit" className="w-full">
+          Registrarse
+        </Button>
+      </form>
+    </Form>
+  )
 }
