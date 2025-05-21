@@ -29,6 +29,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
+  FormDescription,
   FormMessage,
 } from "@/components/ui/form";
 import {
@@ -103,7 +104,10 @@ import {
 } from "@/app/checkout/page";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
+import { updateUserProfileActions } from "@/app/actions/userProfileActions";
+import { changeUserPasswordActions } from "@/app/actions/userProfileActions";
 export const dynamic = "force-dynamic";
 
 // Loader para mostrar mientras carga el perfil
@@ -147,18 +151,19 @@ function UserProfileContent() {
   const [addressToDelete, setAddressToDelete] =
     useState<Tables<"direcciones"> | null>(null);
 
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+
   // Mensaje de éxito tras realizar un pedido
   useEffect(() => {
     const orderSuccess = searchParams.get("order_success");
     if (orderSuccess === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL para que el mensaje no aparezca en recargas.
-      // router.replace('/user-profile', { scroll: false });
     }
-  }, [searchParams, router]);
+  }, [searchParams]);
 
   // Obtener usuario autenticado y perfil
-  const fetchUserData = useCallback(async () => {
+  const fetchUserProfileData = useCallback(async () => {
     setIsLoading(true);
     const {
       data: { user: authUser },
@@ -198,12 +203,12 @@ function UserProfileContent() {
   }, [supabase, router, toast]);
 
   useEffect(() => {
-    fetchUserData();
-  }, [fetchUserData]);
+    fetchUserProfileData();
+  }, [fetchUserProfileData]);
 
   // Obtener pedidos del usuario
   const fetchOrders = useCallback(async () => {
-    if (!profile) return; // Asegurarse que el perfil esté cargado
+    if (!profile) return;
     setIsLoadingOrders(true);
     setErrorOrders(null);
     try {
@@ -223,7 +228,7 @@ function UserProfileContent() {
 
   // Obtener direcciones del usuario
   const fetchAddresses = useCallback(async () => {
-    if (!profile) return; // Asegurarse que el perfil esté cargado
+    if (!profile) return;
     setIsLoadingAddresses(true);
     setErrorAddresses(null);
     try {
@@ -267,7 +272,6 @@ function UserProfileContent() {
     if (!status) return "outline";
     switch (status) {
       case "Pagado":
-        return "default";
       case "Enviado":
       case "Entregado":
         return "default";
@@ -301,7 +305,7 @@ function UserProfileContent() {
     const result = await deleteUserAddressAction(addressToDelete.id);
     if (result.success) {
       toast({ title: "Dirección Eliminada", description: result.message });
-      fetchAddresses(); // Recargar direcciones
+      fetchAddresses();
     } else {
       toast({
         title: "Error al Eliminar",
@@ -313,12 +317,17 @@ function UserProfileContent() {
     setAddressToDelete(null);
   };
 
+  // Abrir diálogo de edición de perfil
+  const handleOpenEditProfileDialog = () => {
+    setIsProfileDialogOpen(true);
+  };
+
+  // Renderizado condicional basado en el estado de carga
   if (isLoading) {
     return <UserProfileLoading />;
   }
 
   if (!user || !profile) {
-    // Este caso ya se maneja en fetchUserData, pero como fallback
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
@@ -352,27 +361,27 @@ function UserProfileContent() {
           </Alert>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
           {/* Panel Izquierdo */}
-          <section className="md:col-span-1 space-y-6">
+          <section className="space-y-6 md:col-span-1">
             <Card className="shadow-xl">
-              <CardHeader className="text-center border-b pb-6">
-                <div className="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 mb-4">
+              <CardHeader className="border-b pb-6 text-center">
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
                   <UserCircle className="h-12 w-12 text-primary" />
                 </div>
                 <CardTitle className="text-3xl font-bold text-primary">
                   {profile.nombre || user.email}
                 </CardTitle>
-                <CardDescription className="text-muted-foreground pt-1 capitalize">
+                <CardDescription className="pt-1 capitalize text-muted-foreground">
                   {profile.rol}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="p-6 space-y-3">
+              <CardContent className="space-y-3 p-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-earthy-green mb-2">
+                  <h3 className="mb-2 text-lg font-semibold text-earthy-green">
                     Información de la Cuenta
                   </h3>
-                  <div className="text-sm text-foreground space-y-1">
+                  <div className="space-y-1 text-sm text-foreground">
                     <p>
                       <span className="font-medium">Nombre:</span>{" "}
                       {profile.nombre || "No especificado"}
@@ -389,34 +398,28 @@ function UserProfileContent() {
                       })}
                     </p>
                   </div>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" className="w-full mt-3" disabled>
-                        <Edit3 className="mr-2 h-4 w-4" /> Editar Perfil
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Próximamente: Edita tu nombre y otros datos.</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <Button
+                    variant="outline"
+                    className="mt-3 w-full"
+                    onClick={handleOpenEditProfileDialog}
+                  >
+                    <Edit3 className="mr-2 h-4 w-4" /> Editar Perfil
+                  </Button>
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-earthy-green mt-4 mb-2">
                     Seguridad
                   </h3>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" className="w-full" disabled>
-                        <KeyRound className="mr-2 h-4 w-4" /> Cambiar Contraseña
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Próximamente: Actualiza tu contraseña.</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => setIsPasswordDialogOpen(true)}
+                  >
+                    <KeyRound className="mr-2 h-4 w-4" /> Cambiar Contraseña
+                  </Button>
                 </div>
               </CardContent>
-              <CardFooter className="border-t p-6 flex justify-end">
+              <CardFooter className="flex justify-end border-t p-6">
                 <Button onClick={handleSignOut} variant="destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   Cerrar Sesión
@@ -445,18 +448,18 @@ function UserProfileContent() {
           </section>
 
           {/* Panel Central/Derecho */}
-          <section className="md:col-span-2 space-y-6">
+          <section className="space-y-6 md:col-span-2">
             {/* Pedidos */}
             <Card className="shadow-xl">
               <CardHeader>
-                <CardTitle className="text-2xl text-earthy-green flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-2xl text-earthy-green">
                   <ClipboardList className="h-6 w-6" />
                   Mis Pedidos
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {isLoadingOrders ? (
-                  <div className="flex justify-center items-center py-10">
+                  <div className="flex items-center justify-center py-10">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     <p className="ml-3 text-muted-foreground">
                       Cargando pedidos...
@@ -469,7 +472,7 @@ function UserProfileContent() {
                     <AlertDescription>{errorOrders}</AlertDescription>
                   </Alert>
                 ) : orders.length === 0 ? (
-                  <div className="text-center py-10 text-muted-foreground">
+                  <div className="py-10 text-center text-muted-foreground">
                     <ShoppingBag className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                     <p>Aún no tienes pedidos.</p>
                     <Button
@@ -487,15 +490,12 @@ function UserProfileContent() {
                         key={order.id}
                         className="overflow-hidden border"
                       >
-                        <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-muted/30 gap-2">
+                        <CardHeader className="flex flex-col items-start justify-between gap-2 bg-muted/30 p-4 sm:flex-row sm:items-center">
                           <div>
                             <p className="text-sm font-medium text-foreground">
                               Pedido{" "}
                               <span className="text-primary">
-                                #
-                                {(order.id || "N/A")
-                                  .substring(0, 8)
-                                  .toUpperCase()}
+                                #{(order.id || "N/A").substring(0, 8).toUpperCase()}
                               </span>
                             </p>
                             <p className="text-xs text-muted-foreground">
@@ -509,14 +509,14 @@ function UserProfileContent() {
                             {order.estado?.replace("_", " ") || "Desconocido"}
                           </Badge>
                         </CardHeader>
-                        <CardContent className="p-4 space-y-2">
+                        <CardContent className="space-y-2 p-4">
                           <p className="text-sm">
                             <span className="font-medium">Total:</span> MXN$
                             {typeof order.total === "number"
                               ? order.total.toFixed(2)
                               : "N/A"}
                           </p>
-                          <p className="text-sm text-muted-foreground italic">
+                          <p className="text-sm italic text-muted-foreground">
                             <span className="font-medium not-italic">
                               Contenido:
                             </span>{" "}
@@ -546,8 +546,8 @@ function UserProfileContent() {
 
             {/* Direcciones */}
             <Card className="shadow-xl">
-              <CardHeader className="flex flex-row justify-between items-center">
-                <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-xl text-earthy-green">
                   <MapPin className="h-5 w-5" />
                   Mis Direcciones
                 </CardTitle>
@@ -557,7 +557,7 @@ function UserProfileContent() {
               </CardHeader>
               <CardContent>
                 {isLoadingAddresses ? (
-                  <div className="flex justify-center items-center py-6">
+                  <div className="flex items-center justify-center py-6">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     <p className="ml-2 text-muted-foreground">
                       Cargando direcciones...
@@ -570,13 +570,13 @@ function UserProfileContent() {
                     <AlertDescription>{errorAddresses}</AlertDescription>
                   </Alert>
                 ) : addresses.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-6 text-center">
+                  <p className="py-6 text-center text-sm text-muted-foreground">
                     No tienes direcciones guardadas.
                   </p>
                 ) : (
                   <div className="space-y-3">
                     {addresses.map((address) => (
-                      <Card key={address.id} className="p-4 text-sm border">
+                      <Card key={address.id} className="border p-4 text-sm">
                         <p className="font-semibold">{address.calle}</p>
                         <p>
                           {address.ciudad}, {address.estado || "N/A"},{" "}
@@ -585,11 +585,9 @@ function UserProfileContent() {
                         <p>{address.pais}</p>
                         {(address.nombre_completo_destinatario ||
                           address.telefono_contacto) && (
-                          <div className="text-xs text-muted-foreground mt-1 pt-1 border-t">
+                          <div className="mt-1 border-t pt-1 text-xs text-muted-foreground">
                             {address.nombre_completo_destinatario && (
-                              <p>
-                                Destinatario: {address.nombre_completo_destinatario}
-                              </p>
+                              <p>Destinatario: {address.nombre_completo_destinatario}</p>
                             )}
                             {address.telefono_contacto && (
                               <p>Tel: {address.telefono_contacto}</p>
@@ -622,7 +620,7 @@ function UserProfileContent() {
             {/* Preferencias */}
             <Card className="shadow-xl">
               <CardHeader>
-                <CardTitle className="text-xl text-earthy-green flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-xl text-earthy-green">
                   <Settings className="h-5 w-5" />
                   Preferencias de la Cuenta
                 </CardTitle>
@@ -683,6 +681,27 @@ function UserProfileContent() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Diálogo de Edición de Perfil */}
+        <EditProfileDialog
+          isOpen={isProfileDialogOpen}
+          onOpenChange={setIsProfileDialogOpen}
+          profile={profile} // Corrected prop name from currentProfile to profile
+          onProfileUpdated={fetchUserProfileData}
+        />
+
+        {/* Diálogo de Cambio de Contraseña */}
+        <ChangePasswordDialog
+          isOpen={isPasswordDialogOpen}
+          onOpenChange={setIsPasswordDialogOpen}
+          onPasswordChanged={() => {
+            toast({
+              title: "Contraseña Actualizada",
+              description: "Tu contraseña ha sido cambiada exitosamente.",
+            });
+            setIsPasswordDialogOpen(false);
+          }}
+        />
       </main>
     </TooltipProvider>
   );
@@ -836,93 +855,331 @@ function AddAddressDialog({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={formMethods.control}
-                name="estado"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Estado</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ej: Jalisco" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField
-                control={formMethods.control}
-                name="codigoPostal"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Código Postal</FormLabel>
-                    <FormControl>
-                      <Input type="text" placeholder="01234" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={formMethods.control}
-                name="pais"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>País</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecciona un país" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="México">México</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
             <FormField
               control={formMethods.control}
-              name="telefono"
+              name="estado"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Teléfono de Contacto (10 dígitos)</FormLabel>
+                  <FormLabel>Estado</FormLabel>
                   <FormControl>
-                    <Input type="tel" placeholder="5512345678" {...field} />
+                    <Input placeholder="Ej: Jalisco" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <DialogFooter className="pt-6">
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField
+              control={formMethods.control}
+              name="codigoPostal"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Código Postal</FormLabel>
+                  <FormControl>
+                    <Input type="text" placeholder="01234" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={formMethods.control}
+              name="pais"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>País</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecciona un país" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="México">México</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <FormField
+            control={formMethods.control}
+            name="telefono"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Teléfono de Contacto (10 dígitos)</FormLabel>
+                <FormControl>
+                  <Input type="tel" placeholder="5512345678" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <DialogFooter className="pt-6">
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmittingAddress}
+              >
+                Cancelar
+              </Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={isSubmittingAddress || !formMethods.formState.isValid}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {isSubmittingAddress ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              {existingAddress ? "Guardar Cambios" : "Añadir Dirección"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </FormProvider>
+    </DialogContent>
+  </Dialog>
+);
+}
+
+interface EditProfileDialogProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onProfileUpdated: () => void;
+  profile: Tables<"usuarios"> | null;
+}
+
+function EditProfileDialog({
+  isOpen,
+  onOpenChange,
+  onProfileUpdated,
+  profile,
+}: EditProfileDialogProps) {
+  const profileFormSchema = z.object({
+    nombre: z.string().optional(),
+  });
+
+  type ProfileFormValues = z.infer<typeof profileFormSchema>;
+
+  const formMethods = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      nombre: profile?.nombre || "",
+    },
+  });
+
+  useEffect(() => {
+    if (isOpen && profile) {
+      formMethods.reset({
+        nombre: profile.nombre || "",
+      });
+    } else if (!isOpen) {
+      formMethods.reset({ nombre: "" });
+    }
+  }, [isOpen, profile, formMethods]);
+
+  const { toast } = useToast();
+
+  const handleProfileSubmit = async (data: ProfileFormValues) => {
+    const result = await updateUserProfileActions(data);
+
+    if (result.success) {
+      toast({
+        title: "Perfil Actualizado",
+        description: result.message || "Tu perfil ha sido actualizado correctamente.",
+      });
+      onProfileUpdated();
+      onOpenChange(false);
+    } else {
+      toast({
+        title: "Error al Actualizar",
+        description: result.message || "No se pudo actualizar tu perfil.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar Perfil</DialogTitle>
+          <DialogDescription>
+            Actualiza la información de tu perfil.
+          </DialogDescription>
+        </DialogHeader>
+        <FormProvider {...formMethods}>
+          <form
+            onSubmit={formMethods.handleSubmit(handleProfileSubmit)}
+            className="space-y-4 py-4"
+          >
+            <FormField
+              control={formMethods.control}
+              name="nombre"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nombre</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Tu nombre completo" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter className="pt-4">
               <DialogClose asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={isSubmittingAddress}
-                >
+                <Button type="button" variant="outline">
                   Cancelar
                 </Button>
               </DialogClose>
-              <Button
-                type="submit"
-                disabled={
-                  isSubmittingAddress || !formMethods.formState.isValid
-                }
-                className="bg-primary hover:bg-primary/90"
-              >
-                {isSubmittingAddress ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
-                {existingAddress ? "Guardar Cambios" : "Añadir Dirección"}
+              <Button type="submit" className="bg-primary hover:bg-primary/90">
+                Guardar Cambios
+              </Button>
+            </DialogFooter>
+          </form>
+        </FormProvider>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ChangePasswordDialogProps {
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  onPasswordChanged: () => void;
+}
+
+function ChangePasswordDialog({
+  isOpen,
+  onOpenChange,
+  onPasswordChanged,
+}: ChangePasswordDialogProps) {
+  const { toast } = useToast();
+
+  const passwordFormSchema = z
+    .object({
+      currentPassword: z.string().min(1, "Introduce tu contraseña actual."),
+      newPassword: z
+        .string()
+        .trim()
+        .min(8, "La nueva contraseña debe tener al menos 8 caracteres.")
+        .regex(/[A-Z]/, "La nueva contraseña debe contener al menos una mayúscula.")
+        .regex(/[a-z]/, "La nueva contraseña debe contener al menos una minúscula.")
+        .regex(/\d/, "La nueva contraseña debe contener al menos un número.")
+        .regex(/[^a-zA-Z0-9]/, "La nueva contraseña debe contener al menos un carácter especial."),
+      confirmPassword: z.string().min(1, "Confirma tu nueva contraseña."),
+    })
+    .refine((data) => data.newPassword === data.confirmPassword, {
+      message: "Las contraseñas no coinciden.",
+      path: ["confirmPassword"],
+    });
+
+  type PasswordFormValues = z.infer<typeof passwordFormSchema>;
+
+  const formMethods = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordFormSchema),
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      formMethods.reset();
+    }
+  }, [isOpen, formMethods]);
+
+  const handleChangePasswordSubmit = async (data: PasswordFormValues) => {
+    const result = await changeUserPasswordActions({ newPassword: data.newPassword });
+
+    if (result.success) {
+      toast({
+        title: "Contraseña Actualizada",
+        description: result.message || "Tu contraseña ha sido actualizada correctamente.",
+      });
+      onPasswordChanged();
+    } else {
+      toast({
+        title: "Error al Cambiar Contraseña",
+        description: result.message || "No se pudo cambiar tu contraseña.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cambiar Contraseña</DialogTitle>
+          <DialogDescription>
+            Introduce tu contraseña actual y la nueva contraseña.
+          </DialogDescription>
+        </DialogHeader>
+        <FormProvider {...formMethods}>
+          <form
+            onSubmit={formMethods.handleSubmit(handleChangePasswordSubmit)}
+            className="space-y-4 py-4"
+          >
+            <FormField
+              control={formMethods.control}
+              name="currentPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contraseña Actual</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={formMethods.control}
+              name="newPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nueva Contraseña</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    La nueva contraseña debe tener al menos 8 caracteres.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={formMethods.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Confirmar Nueva Contraseña</FormLabel>
+                  <FormControl>
+                    <Input type="password" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <DialogFooter className="pt-4">
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  Cancelar
+                </Button>
+              </DialogClose>
+              <Button type="submit" className="bg-primary hover:bg-primary/90">
+                Cambiar Contraseña
               </Button>
             </DialogFooter>
           </form>
