@@ -230,4 +230,6 @@ export async function deleteUserAddressAction(
     return { success: true, message: 'Dirección eliminada correctamente.' };
   } catch (e: any) {
     console.error("[deleteUserAddressAction] Critical error:", e.message);
-    return { success: false, message: `Error
+    return { success: false, message: `Error inesperado al eliminar la dirección: ${e.message}` };
+  }
+}

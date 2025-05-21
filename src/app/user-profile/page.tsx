@@ -17,8 +17,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input"; 
 import { Label } from "@/components/ui/label"; 
-// Textarea no se usa directamente aquí, pero podría ser útil para un futuro "editar perfil"
-// import { Textarea } from "@/components/ui/textarea"; 
 import { 
   Form, 
   FormControl, 
@@ -83,8 +81,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { 
   getUserOrdersAction, 
   getUserAddressesAction,
-  updateUserAddressAction, // Importar la nueva acción
-  deleteUserAddressAction,  // Importar la nueva acción
+  updateUserAddressAction,
+  deleteUserAddressAction,
   type UserOrderForDisplay 
 } from "@/app/actions/userProfileActions";
 import { saveShippingAddressAction } from "@/app/actions/checkoutActions"; 
@@ -125,15 +123,16 @@ function UserProfileContent() {
   const [errorAddresses, setErrorAddresses] = useState<string | null>(null);
   
   const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
-  const [editingAddress, setEditingAddress] = useState<Tables<'direcciones'> | null>(null); // Para edición
+  const [editingAddress, setEditingAddress] = useState<Tables<'direcciones'> | null>(null);
   
   const [isConfirmDeleteDialogOpen, setIsConfirmDeleteDialogOpen] = useState(false);
   const [addressToDelete, setAddressToDelete] = useState<Tables<'direcciones'> | null>(null);
 
   useEffect(() => {
-    if (searchParams.get("order_success") === "true") {
+    const orderSuccess = searchParams.get("order_success");
+    if (orderSuccess === "true") {
       setShowOrderSuccessMessage(true);
-      // Opcional: limpiar el parámetro de la URL
+      // Opcional: limpiar el parámetro de la URL para que el mensaje no aparezca en recargas.
       // router.replace('/user-profile', { scroll: false }); 
     }
   }, [searchParams, router]);
@@ -169,13 +168,15 @@ function UserProfileContent() {
   }, [fetchUserData]);
   
   const fetchOrders = useCallback(async () => {
-    if (!profile) return;
+    if (!profile) return; // Asegurarse que el perfil esté cargado
     setIsLoadingOrders(true);
     setErrorOrders(null);
     try {
+      console.log("[UserProfilePage] Fetching orders for profile:", profile.id);
       const userOrders = await getUserOrdersAction();
       setOrders(userOrders);
     } catch (err: any) {
+      console.error("[UserProfilePage] Error fetching orders:", err);
       setErrorOrders("No se pudieron cargar tus pedidos.");
       toast({ title: "Error al Cargar Pedidos", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
@@ -184,14 +185,14 @@ function UserProfileContent() {
   }, [profile, toast]);
 
   const fetchAddresses = useCallback(async () => {
-    if (!profile) return;
+    if (!profile) return; // Asegurarse que el perfil esté cargado
     setIsLoadingAddresses(true);
     setErrorAddresses(null);
     try {
+      console.log("[UserProfilePage] Fetching addresses for profile:", profile.id);
       const userAddresses = await getUserAddressesAction();
       setAddresses(userAddresses);
-    } catch (err: any) {
-      setErrorAddresses("No se pudieron cargar tus direcciones.");
+    } catch (err: any)      setErrorAddresses("No se pudieron cargar tus direcciones.");
       toast({ title: "Error al Cargar Direcciones", description: err.message || "Ocurrió un problema.", variant: "destructive" });
     } finally {
       setIsLoadingAddresses(false);
@@ -214,10 +215,9 @@ function UserProfileContent() {
   
   const getOrderStatusBadgeVariant = (status?: Tables<'pedidos'>['estado'] | null): "default" | "secondary" | "destructive" | "outline" => {
     if (!status) return 'outline';
-    // Asegúrate que 'Pagado' esté en tu tipo ENUM estado_pedido_type en database.types.ts
     switch (status) {
       case 'Pagado':
-        return 'default'; // O un color 'success' si lo tienes
+        return 'default'; 
       case 'Enviado':
       case 'Entregado':
         return 'default'; 
@@ -232,7 +232,7 @@ function UserProfileContent() {
   };
 
   const handleOpenAddAddressDialog = () => {
-    setEditingAddress(null); // Asegurarse que no haya una dirección en edición
+    setEditingAddress(null); 
     setIsAddressDialogOpen(true);
   };
 
@@ -241,10 +241,6 @@ function UserProfileContent() {
     setIsAddressDialogOpen(true);
   };
   
-  const handleAddressSavedOrUpdated = () => {
-    fetchAddresses(); 
-  };
-
   const handleDeleteAddressClick = (address: Tables<'direcciones'>) => {
     setAddressToDelete(address);
     setIsConfirmDeleteDialogOpen(true);
@@ -255,7 +251,7 @@ function UserProfileContent() {
     const result = await deleteUserAddressAction(addressToDelete.id);
     if (result.success) {
       toast({ title: "Dirección Eliminada", description: result.message });
-      fetchAddresses(); 
+      fetchAddresses(); // Recargar direcciones
     } else {
       toast({ title: "Error al Eliminar", description: result.message, variant: "destructive" });
     }
@@ -264,19 +260,16 @@ function UserProfileContent() {
   };
 
   if (isLoading) {
-    return <UserProfileLoading />; // Ya está definido arriba
+    return <UserProfileLoading />; 
   }
 
   if (!user || !profile) {
+    // Este caso ya se maneja en fetchUserData, pero como fallback
     return (
       <main className="flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center p-4 md:p-8 bg-background">
         <Card className="w-full max-w-md text-center">
-          <CardHeader>
-            <CardTitle className="text-destructive">Error</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>No se pudo cargar la información del perfil. Serás redirigido.</p>
-          </CardContent>
+          <CardHeader><CardTitle className="text-destructive">Error</CardTitle></CardHeader>
+          <CardContent><p>No se pudo cargar la información del perfil. Serás redirigido.</p></CardContent>
         </Card>
       </main>
     );
@@ -296,7 +289,6 @@ function UserProfileContent() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Columna de Perfil y Acciones */}
           <section className="md:col-span-1 space-y-6">
             <Card className="shadow-xl">
               <CardHeader className="text-center border-b pb-6">
@@ -366,7 +358,6 @@ function UserProfileContent() {
             )}
           </section>
 
-          {/* Columna de Historial de Pedidos y Direcciones */}
           <section className="md:col-span-2 space-y-6">
             <Card className="shadow-xl">
               <CardHeader>
@@ -414,7 +405,7 @@ function UserProfileContent() {
                         </CardHeader>
                         <CardContent className="p-4 space-y-2">
                           <p className="text-sm">
-                            <span className="font-medium">Total:</span> MXN${typeof order.total === 'number' ? order.total.toFixed(2) : 'N/A'}
+                            <span className="font-medium">Total:</span> MXN\${typeof order.total === 'number' ? order.total.toFixed(2) : 'N/A'}
                           </p>
                           <p className="text-sm text-muted-foreground italic">
                             <span className="font-medium not-italic">Contenido:</span> {order.items_summary}
@@ -507,11 +498,11 @@ function UserProfileContent() {
           onOpenChange={(isOpen) => {
             setIsAddressDialogOpen(isOpen);
             if (!isOpen) {
-              console.log("[UserProfilePage] Dialog closed, clearing editingAddress.");
+              console.log("[UserProfilePage] Address Dialog closed, clearing editingAddress.");
               setEditingAddress(null); 
             }
           }}
-          onAddressSavedOrUpdated={handleAddressSavedOrUpdated}
+          onAddressSavedOrUpdated={fetchAddresses} // Recargar direcciones después de guardar/actualizar
           existingAddress={editingAddress}
         />
 
@@ -538,12 +529,10 @@ function UserProfileContent() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
       </main>
     </TooltipProvider>
   );
 }
-
 
 interface AddAddressDialogProps {
   isOpen: boolean;
@@ -567,7 +556,7 @@ function AddAddressDialog({
       nombreCompleto:  "", 
       direccion: "",
       ciudad: "",
-      estado: "",
+      estado: "", // Asegúrate que tu schema lo maneje como string si lo necesita el input
       codigoPostal: "",
       pais: "México", 
       telefono: "", 
@@ -575,30 +564,32 @@ function AddAddressDialog({
   });
 
   useEffect(() => {
-    if (existingAddress) {
-      console.log("[AddAddressDialog] Editing existing address:", existingAddress);
-      formMethods.reset({
-        nombreCompleto: existingAddress.nombre_completo_destinatario || "",
-        direccion: existingAddress.calle || "",
-        ciudad: existingAddress.ciudad || "",
-        estado: existingAddress.estado || "",
-        codigoPostal: existingAddress.codigo_postal || "",
-        pais: existingAddress.pais || "México",
-        telefono: existingAddress.telefono_contacto || "",
-      });
-    } else {
-      console.log("[AddAddressDialog] Adding new address, resetting form.");
-      formMethods.reset({
-        nombreCompleto: "",
-        direccion: "",
-        ciudad: "",
-        estado: "",
-        codigoPostal: "",
-        pais: "México",
-        telefono: "",
-      });
+    if (isOpen) { // Resetear solo si se abre, o si cambia existingAddress mientras está abierto
+      if (existingAddress) {
+        console.log("[AddAddressDialog] Editing existing address:", existingAddress);
+        formMethods.reset({
+          nombreCompleto: existingAddress.nombre_completo_destinatario || "",
+          direccion: existingAddress.calle || "",
+          ciudad: existingAddress.ciudad || "",
+          estado: existingAddress.estado || "",
+          codigoPostal: existingAddress.codigo_postal || "",
+          pais: existingAddress.pais || "México",
+          telefono: existingAddress.telefono_contacto || "",
+        });
+      } else {
+        console.log("[AddAddressDialog] Adding new address, resetting form.");
+        formMethods.reset({
+          nombreCompleto: "",
+          direccion: "",
+          ciudad: "",
+          estado: "",
+          codigoPostal: "",
+          pais: "México",
+          telefono: "",
+        });
+      }
     }
-  }, [existingAddress, formMethods, isOpen]); // Depender de isOpen para resetear si se cierra y reabre para "Añadir"
+  }, [existingAddress, isOpen, formMethods]);
 
   const handleAddressSubmit = async (data: ShippingFormValues) => {
     setIsSubmittingAddress(true);
@@ -608,13 +599,14 @@ function AddAddressDialog({
     if (existingAddress?.id) {
       result = await updateUserAddressAction(existingAddress.id, data);
     } else {
+      // Asumimos que saveShippingAddressAction también mapea ShippingFormValues a los campos de 'direcciones'
       result = await saveShippingAddressAction(data); 
     }
 
     if (result.success) {
       toast({
         title: existingAddress ? "Dirección Actualizada" : "Dirección Guardada",
-        description: result.message || `Tu dirección ha sido ${existingAddress ? 'actualizada' : 'guardada'}.`,
+        description: result.message || \`Tu dirección ha sido \${existingAddress ? 'actualizada' : 'guardada'}.\`,
       });
       onAddressSavedOrUpdated(); 
       onOpenChange(false); 
@@ -725,7 +717,6 @@ function AddAddressDialog({
                             </FormControl>
                             <SelectContent>
                             <SelectItem value="México">México</SelectItem>
-                            {/* Puedes añadir más países aquí */}
                             </SelectContent>
                         </Select>
                         <FormMessage />
@@ -776,4 +767,4 @@ export default function UserProfilePage() {
   );
 }
 
-```revisalo y genera tus cambios
+```este codigo sigue con error
