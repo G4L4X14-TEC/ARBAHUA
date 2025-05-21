@@ -233,3 +233,73 @@ export async function deleteUserAddressAction(
     return { success: false, message: `Error inesperado al eliminar la dirección: ${e.message}` };
   }
 }
+
+export async function updateUserProfileActions( // Removed duplicate declaration
+  profileData: { nombre?: string } // Changed type to string | undefined
+): Promise<{ success: boolean; message: string }> {
+  console.log('[updateUserProfileActions] Attempting to update user profile with data:', profileData);
+  const supabase = await createSupabaseServerClientAction();
+  if (!supabase) {
+    return { success: false, message: "Error de conexión con el servidor." };
+  }
+
+  const { data: { user }, error: userAuthError } = await supabase.auth.getUser();
+  if (userAuthError || !user) {
+    console.error('[updateUserProfileActions] User not authenticated.');
+    return { success: false, message: "Debes iniciar sesión para actualizar tu perfil." };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('usuarios') // Ensure 'usuarios' table is being updated
+      // Pass only the defined properties. If nombre is undefined, it won't be included in the update payload,
+      // which is the correct behavior for optional fields.
+      .update(profileData)
+      .eq('id', user.id); // Asegurar que el usuario solo actualice su propio perfil
+
+    if (error) {
+      console.error('[updateUserProfileActions] Error updating profile:', error.message);
+      return { success: false, message: `Error al actualizar el perfil: ${error.message}` };
+    }
+    console.log('[updateUserProfileActions] Profile updated successfully for User ID:', user.id);
+    return { success: true, message: 'Perfil actualizado correctamente.' };
+  } catch (e: any) {
+    console.error('[updateUserProfileActions] Critical error:', e.message);
+    return { success: false, message: `Error inesperado al actualizar el perfil: ${e.message}` };
+  }
+}
+
+export async function changeUserPasswordActions(
+  passwords: { currentPassword?: string, newPassword: string }
+): Promise<{ success: boolean; message: string }> {
+  console.log('[changeUserPasswordActions] Attempting to change user password.');
+  const supabase = await createSupabaseServerClientAction();
+  if (!supabase) {
+    return { success: false, message: "Error de conexión con el servidor." };
+  }
+
+  const { data: { user }, error: userAuthError } = await supabase.auth.getUser();
+  if (userAuthError || !user) {
+    console.error('[changeUserPasswordActions] User not authenticated.');
+    return { success: false, message: "Debes iniciar sesión para cambiar tu contraseña." };
+  }
+
+  try {
+    // Supabase's updateUser handles the password change for the authenticated user.
+    // It implicitly checks the current authentication state.
+    const { error } = await supabase.auth.updateUser({ password: passwords.newPassword });
+
+    if (error) {
+      console.error('[changeUserPasswordActions] Error changing password:', error.message);
+      // Supabase often provides a specific error message if the old password is required/incorrect
+      return { success: false, message: `Error al cambiar la contraseña: ${error.message}` };
+    }
+
+    console.log('[changeUserPasswordActions] Password changed successfully for User ID:', user.id);
+    // Note: Password changes might invalidate existing sessions depending on Supabase settings.
+    return { success: true, message: 'Contraseña actualizada correctamente. Por favor, vuelve a iniciar sesión si se cierra tu sesión.' };
+  } catch (e: any) {
+    console.error('[changeUserPasswordActions] Critical error:', e.message);
+    return { success: false, message: `Error inesperado al cambiar la contraseña: ${e.message}` };
+  }
+}
