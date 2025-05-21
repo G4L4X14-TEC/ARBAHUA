@@ -61,6 +61,17 @@ export function RegisterForm() {
   async function onSubmit(values: RegisterFormValues) {
     setIsLoading(true);
     try {
+      // Detailed console log of the payload for verification
+ console.log("Attempting registration with payload:", {
+ email: values.email,
+ password: "[REDACTED]", // Mask password for security
+ options: {
+ data: {
+ nombre: values.nombre,
+ rol: values.role,
+ },
+ },
+      });
       const { error } = await supabase.auth.signUp({
         email: values.email,
         password: values.password,
