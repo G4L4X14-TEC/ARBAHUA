@@ -1,4 +1,3 @@
-
 "use client";
 
 import * as React from "react";
@@ -18,14 +17,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ShoppingCart, UserCircle, LogOut, Store, Search, Contact as ContactIcon, Home, Menu as MenuIcon } from "lucide-react";
+import { ShoppingCart, UserCircle, LogOut, Store, Search, Contact as ContactIcon, Home, Menu as MenuIcon, Loader2 } from "lucide-react";
 
 // Helper para obtener iniciales del nombre
 const getInitials = (name: string | undefined) => {
   if (!name) return "U";
   const names = name.split(' ');
   if (names.length === 1) return names[0].charAt(0).toUpperCase();
-  return names[0].charAt(0).toUpperCase() + names[names.length - 1].charAt(0).toUpperCase();
+  return names[0].charAt(0).toUpperCase() + (names.length > 1 ? names[names.length - 1].charAt(0).toUpperCase() : '');
 };
 
 export default function Navbar() {
@@ -34,37 +33,22 @@ export default function Navbar() {
   const { toast } = useToast();
   const [user, setUser] = React.useState<User | null>(null);
   const [userProfile, setUserProfile] = React.useState<{ nombre?: string | null; rol?: string | null } | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoading, setIsLoading] = React.useState(true); // Inicia como true
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   React.useEffect(() => {
-    const fetchUser = async () => {
-      setIsLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        setUser(session.user);
-        const { data: profile } = await supabase
-          .from("usuarios")
-          .select("nombre, rol")
-          .eq("id", session.user.id)
-          .single();
-        setUserProfile(profile);
-      } else {
-        setUser(null);
-        setUserProfile(null);
-      }
-      setIsLoading(false);
-    };
-
-    fetchUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setIsLoading(true); // Set loading true while auth state potentially changes
-        if (session?.user) {
+    const fetchUserAndProfile = async () => {
+      setIsLoading(true); // Asegurarse de que isLoading sea true al inicio de la carga
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error("Error getting session in Navbar:", sessionError.message);
+          setUser(null);
+          setUserProfile(null);
+          // No lanzar toast aquí necesariamente, podría ser intrusivo si es un error temporal de red
+        } else if (session?.user) {
           setUser(session.user);
-          // Fetch profile only if user exists
           const { data: profile, error: profileError } = await supabase
             .from("usuarios")
             .select("nombre, rol")
@@ -72,8 +56,8 @@ export default function Navbar() {
             .single();
           
           if (profileError) {
-            console.error("Error fetching user profile on auth change:", profileError);
-            setUserProfile(null); // Reset profile on error
+            console.error("Error fetching user profile in Navbar:", profileError.message);
+            setUserProfile(null); // Limpiar perfil si hay error
           } else {
             setUserProfile(profile);
           }
@@ -81,7 +65,39 @@ export default function Navbar() {
           setUser(null);
           setUserProfile(null);
         }
-        setIsLoading(false); 
+      } catch (error: any) {
+        console.error("Unexpected error fetching user/profile in Navbar:", error.message);
+        setUser(null);
+        setUserProfile(null);
+      } finally {
+        setIsLoading(false); // MUY IMPORTANTE: Siempre poner isLoading en false al final
+      }
+    };
+
+    fetchUserAndProfile();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        setIsLoading(true); // Poner isLoading en true al inicio del cambio de estado de auth
+        if (session?.user) {
+          setUser(session.user);
+          const { data: profile, error: profileError } = await supabase
+            .from("usuarios")
+            .select("nombre, rol")
+            .eq("id", session.user.id)
+            .single();
+          
+          if (profileError) {
+            console.error("Error fetching user profile on auth change:", profileError.message);
+            setUserProfile(null);
+          } else {
+            setUserProfile(profile);
+          }
+        } else {
+          setUser(null);
+          setUserProfile(null);
+        }
+        setIsLoading(false); // Poner isLoading en false después de procesar el cambio
       }
     );
 
@@ -93,13 +109,14 @@ export default function Navbar() {
   const handleSignOut = async () => {
     setIsLoading(true);
     await supabase.auth.signOut();
-    setUser(null);
-    setUserProfile(null);
+    // Los estados user y userProfile se actualizarán por el listener onAuthStateChange
     toast({ title: "Sesión Cerrada", description: "Has cerrado sesión exitosamente." });
     router.push("/");
-    router.refresh(); // Important to re-trigger server components and update state
-    setIsMobileMenuOpen(false); // Close mobile menu if open
-    setIsLoading(false);
+    router.refresh(); 
+    setIsMobileMenuOpen(false);
+    // No es necesario setIsLoading(false) aquí si el listener de auth lo hará.
+    // Pero si el listener no se dispara inmediatamente, podría ser útil.
+    // Por ahora, confiamos en que el listener actualizará isLoading.
   };
   
   const userName = userProfile?.nombre || user?.email;
@@ -147,22 +164,26 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3 md:gap-4">
-          {!isLoading && user && (
+          {!isLoading && user && ( // Solo mostrar si no está cargando Y hay usuario
             <Button variant="ghost" size="icon" onClick={() => router.push('/cart')} className="relative hover:bg-primary/10 hidden md:inline-flex">
               <ShoppingCart className="h-5 w-5 text-primary" />
               <span className="sr-only">Carrito</span>
+              {/* Podríamos añadir un contador de items aquí en el futuro */}
             </Button>
           )}
 
           {isLoading ? (
-            <div className="h-9 w-9 animate-pulse rounded-full bg-muted"></div>
+            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            </div>
           ) : user ? (
             <div className="hidden md:flex">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0 focus-visible:ring-primary">
                     <Avatar className="h-9 w-9 border border-primary/50">
-                      <AvatarImage srcLang={userName || undefined} /> 
+                      {/* Si tienes una URL de avatar para el usuario, puedes ponerla aquí */}
+                      {/* <AvatarImage src={userProfile?.avatar_url || undefined} alt={userName || 'Avatar'} /> */}
                       <AvatarFallback className="bg-primary/20 text-primary font-semibold">
                         {getInitials(userName)}
                       </AvatarFallback>
@@ -192,7 +213,7 @@ export default function Navbar() {
             </div>
           )}
           
-           <div className="md:hidden">
+           <div className="md:hidden"> {/* Menú móvil */}
             <DropdownMenu open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -207,7 +228,10 @@ export default function Navbar() {
                 <DropdownMenuItem onClick={() => { router.push('/contact'); setIsMobileMenuOpen(false); }}><ContactIcon className="mr-2 h-4 w-4" />Contacto</DropdownMenuItem>
                  
                  {isLoading ? (
-                    <DropdownMenuItem disabled>Cargando...</DropdownMenuItem>
+                    <DropdownMenuItem disabled>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Cargando...
+                    </DropdownMenuItem>
                  ) : user ? (
                   <>
                     <DropdownMenuSeparator />
