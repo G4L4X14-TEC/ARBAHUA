@@ -19,7 +19,10 @@ export async function insertUserProfileAction(profile: {
 
   const adminSupabase = getAdminSupabaseClient();
   if (!adminSupabase) {
-    return { success: false, message: 'Error de configuración del servidor.' };
+    return {
+      success: false,
+      message: 'Error de configuración del servidor: falta SUPABASE_SERVICE_ROLE_KEY.',
+    };
   }
 
   const { error } = await adminSupabase
