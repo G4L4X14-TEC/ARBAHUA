@@ -24,7 +24,7 @@ export async function insertUserProfileAction(profile: {
     console.error('[insertUserProfileAction] Missing SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_URL.');
     return {
       success: false,
-      message: 'Error de configuración del servidor: falta SUPABASE_SERVICE_ROLE_KEY.',
+      message: 'Error de configuración del servidor: falta SUPABASE_SERVICE_ROLE_KEY o NEXT_PUBLIC_SUPABASE_URL.',
     };
   }
 
