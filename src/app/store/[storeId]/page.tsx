@@ -26,7 +26,7 @@ type StoreWithProducts = Tables<'tiendas'> & {
 };
 
 async function getStoreDetails(storeId: string): Promise<StoreWithProducts | null> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = createSupabaseServerClient();
   if (!supabase) {
     console.error("[StoreProfilePage] Failed to create Supabase server client.");
     return null;

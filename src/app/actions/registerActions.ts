@@ -9,6 +9,14 @@ export async function insertUserProfileAction(profile: {
   email: string;
   rol: string;
 }): Promise<{ success: boolean; message: string }> {
+  const allowedRoles = new Set(['cliente', 'artesano']);
+  const role = profile.rol?.trim();
+
+  if (!role || !allowedRoles.has(role)) {
+    console.warn('[insertUserProfileAction] Invalid role provided:', profile.rol);
+    return { success: false, message: 'Rol inválido.' };
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -30,7 +38,7 @@ export async function insertUserProfileAction(profile: {
       id: profile.id,
       nombre: profile.nombre,
       email: profile.email,
-      rol: profile.rol,
+      rol: role,
     }]);
 
   if (error) {
