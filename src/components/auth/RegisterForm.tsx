@@ -20,7 +20,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createSupabaseBrowserClient } from '@/lib/supabase/client';
+import { insertUserProfileAction } from '@/app/actions/registerActions';
 
 const roleOptions = [
   { value: 'cliente', label: 'Cliente' },
@@ -46,7 +47,7 @@ export function RegisterForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const supabase = createClientComponentClient()
+  const supabase = createSupabaseBrowserClient()
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -82,19 +83,18 @@ export function RegisterForm() {
         throw new Error("No se pudo obtener el ID del usuario después del registro.");
       }
 
-      // Now, insert the user data into the public.usuarios table
-      // Include the user ID in the data payload
-      const { error: userError } = await supabase
-        .from("usuarios")
-        .insert([{
-          id: userId, // Include the user ID here
-          nombre: values.nombre,
-          email: values.email,
-          rol: values.role,
-        }]);
+      // Insert the user profile via a Server Action using the service role key
+      // to bypass RLS (the auth session may not be established yet if email
+      // confirmation is required, which would cause a 401 with the anon role).
+      const { success, message: insertMessage } = await insertUserProfileAction({
+        id: userId,
+        nombre: values.nombre,
+        email: values.email,
+        rol: values.role,
+      });
 
-      if (userError) {
-        throw userError;
+      if (!success) {
+        throw new Error(insertMessage);
       }
 
       toast({
