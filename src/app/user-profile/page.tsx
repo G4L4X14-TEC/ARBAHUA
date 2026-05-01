@@ -9,6 +9,7 @@
 import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,7 @@ import {
   Edit3,
   PlusCircle,
   Trash2,
+  Camera,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type {
@@ -366,8 +368,18 @@ function UserProfileContent() {
           <section className="space-y-6 md:col-span-1">
             <Card className="shadow-xl">
               <CardHeader className="border-b pb-6 text-center">
-                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-                  <UserCircle className="h-12 w-12 text-primary" />
+                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 overflow-hidden">
+                  {user.user_metadata?.avatar_url ? (
+                    <Image
+                      src={user.user_metadata.avatar_url as string}
+                      alt={profile.nombre || user.email || "Avatar"}
+                      width={80}
+                      height={80}
+                      className="rounded-full object-cover w-full h-full"
+                    />
+                  ) : (
+                    <UserCircle className="h-12 w-12 text-primary" />
+                  )}
                 </div>
                 <CardTitle className="text-3xl font-bold text-primary">
                   {profile.nombre || user.email}
@@ -962,6 +974,7 @@ function EditProfileDialog({
   onProfileUpdated,
   profile,
 }: EditProfileDialogProps) {
+  const supabase = createSupabaseBrowserClient();
   const profileFormSchema = z.object({
     nombre: z.string().optional(),
   });
@@ -975,34 +988,87 @@ function EditProfileDialog({
     },
   });
 
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
+  const [isUploading, setIsUploading] = React.useState(false);
+
   useEffect(() => {
     if (isOpen && profile) {
       formMethods.reset({
         nombre: profile.nombre || "",
       });
+      setAvatarFile(null);
+      setAvatarPreview(null);
     } else if (!isOpen) {
       formMethods.reset({ nombre: "" });
+      setAvatarFile(null);
+      setAvatarPreview(null);
     }
   }, [isOpen, profile, formMethods]);
+
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => setAvatarPreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setAvatarFile(null);
+      setAvatarPreview(null);
+    }
+  };
 
   const { toast } = useToast();
 
   const handleProfileSubmit = async (data: ProfileFormValues) => {
-    const result = await updateUserProfileActions(data);
+    setIsUploading(true);
+    try {
+      if (avatarFile) {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser) {
+          const ext = avatarFile.name.split(".").pop() || "jpg";
+          const filePath = `${authUser.id}/avatar.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("avatars")
+            .upload(filePath, avatarFile, { upsert: true, cacheControl: "3600" });
+          if (uploadError) throw uploadError;
+          const { data: publicUrlData } = supabase.storage
+            .from("avatars")
+            .getPublicUrl(filePath);
+          if (publicUrlData?.publicUrl) {
+            const { error: metaError } = await supabase.auth.updateUser({
+              data: { avatar_url: publicUrlData.publicUrl },
+            });
+            if (metaError) throw metaError;
+          }
+        }
+      }
 
-    if (result.success) {
-      toast({
-        title: "Perfil Actualizado",
-        description: result.message || "Tu perfil ha sido actualizado correctamente.",
-      });
-      onProfileUpdated();
-      onOpenChange(false);
-    } else {
+      const result = await updateUserProfileActions(data);
+
+      if (result.success) {
+        toast({
+          title: "Perfil Actualizado",
+          description: result.message || "Tu perfil ha sido actualizado correctamente.",
+        });
+        onProfileUpdated();
+        onOpenChange(false);
+      } else {
+        toast({
+          title: "Error al Actualizar",
+          description: result.message || "No se pudo actualizar tu perfil.",
+          variant: "destructive",
+        });
+      }
+    } catch (err: any) {
       toast({
         title: "Error al Actualizar",
-        description: result.message || "No se pudo actualizar tu perfil.",
+        description: err.message || "No se pudo actualizar tu perfil.",
         variant: "destructive",
       });
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1020,6 +1086,37 @@ function EditProfileDialog({
             onSubmit={formMethods.handleSubmit(handleProfileSubmit)}
             className="space-y-4 py-4"
           >
+            {/* Avatar upload */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative h-20 w-20 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center">
+                {avatarPreview ? (
+                  <Image
+                    src={avatarPreview}
+                    alt="Vista previa del avatar"
+                    width={80}
+                    height={80}
+                    className="rounded-full object-cover w-full h-full"
+                  />
+                ) : (
+                  <UserCircle className="h-12 w-12 text-primary" />
+                )}
+              </div>
+              <Label
+                htmlFor="avatar-upload"
+                className="flex cursor-pointer items-center gap-1.5 text-sm text-primary hover:underline"
+              >
+                <Camera className="h-4 w-4" />
+                Cambiar foto de perfil
+              </Label>
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
+
             <FormField
               control={formMethods.control}
               name="nombre"
@@ -1035,11 +1132,16 @@ function EditProfileDialog({
             />
             <DialogFooter className="pt-4">
               <DialogClose asChild>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" disabled={isUploading}>
                   Cancelar
                 </Button>
               </DialogClose>
-              <Button type="submit" className="bg-primary hover:bg-primary/90">
+              <Button
+                type="submit"
+                className="bg-primary hover:bg-primary/90"
+                disabled={isUploading}
+              >
+                {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Guardar Cambios
               </Button>
             </DialogFooter>
