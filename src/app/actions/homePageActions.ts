@@ -2,6 +2,7 @@
 'use server';
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import type { Tables, Database, Json } from '@/lib/supabase/database.types';
 
@@ -20,22 +21,37 @@ export type ProductForDisplay = Tables<'productos'> & {
 export type StoreForDisplay = Tables<'tiendas'>;
 
 
-// Helper function to create a Supabase client for Server Actions
+// Helper function to create a Supabase client for Server Actions.
+// Uses service role key when available (server-only) so that RLS policies
+// don't block reads of public data (featured products, stores) on the home page.
 function createSupabaseServerClientAction() {
-  const cookieStore = cookies(); 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   console.log('[SupabaseServerClientAction] Initializing Supabase client for Server Action.');
   console.log(`  NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? 'SET' : 'NOT SET'}`);
+  console.log(`  SUPABASE_SERVICE_ROLE_KEY: ${serviceRoleKey ? 'SET' : 'NOT SET'}`);
   console.log(`  NEXT_PUBLIC_SUPABASE_ANON_KEY: ${supabaseAnonKey ? 'SET' : 'NOT SET'}`);
 
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.error("[SupabaseServerClientAction] CRITICAL ERROR: Supabase URL or Anon Key is missing in env for Server Action.");
-    return null; 
+  if (!supabaseUrl) {
+    console.error("[SupabaseServerClientAction] CRITICAL ERROR: Supabase URL is missing in env for Server Action.");
+    return null;
   }
 
+  // Prefer service role key for server-side reads so RLS doesn't block public data
+  if (serviceRoleKey) {
+    return createClient<Database>(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+  }
+
+  if (!supabaseAnonKey) {
+    console.error("[SupabaseServerClientAction] CRITICAL ERROR: Neither service role key nor anon key is set.");
+    return null;
+  }
+
+  const cookieStore = cookies();
   return createServerClient<Database>(
     supabaseUrl,
     supabaseAnonKey,
@@ -48,14 +64,14 @@ function createSupabaseServerClientAction() {
           try {
             cookieStore.set({ name, value, ...options });
           } catch (error) {
-            // console.warn(`[SupabaseServerClientAction] Failed to set cookie '${name}' in Server Action:`, error);
+            // ignore in server actions
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.delete({ name, ...options }); // Corrected to use delete
+            cookieStore.delete({ name, ...options });
           } catch (error) {
-            // console.warn(`[SupabaseServerClientAction] Failed to remove cookie '${name}' in Server Action:`, error);
+            // ignore in server actions
           }
         },
       },

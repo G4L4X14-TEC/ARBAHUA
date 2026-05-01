@@ -74,9 +74,23 @@ import {
 } from "@/components/ui/table";
 
 // Schema for creating/editing a store
+const STORE_MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const STORE_ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+
 const storeFormSchema = z.object({
   nombre: z.string().min(3, { message: "El nombre de la tienda debe tener al menos 3 caracteres." }).max(100, { message: "El nombre de la tienda no puede exceder los 100 caracteres." }),
   descripcion: z.string().max(500, { message: "La descripción no puede exceder los 500 caracteres." }).optional().nullable(),
+  logoFile: z.custom<FileList>()
+    .optional()
+    .nullable()
+    .refine(
+      (files) => !files || files.length === 0 || files[0].size <= STORE_MAX_FILE_SIZE,
+      'El tamaño máximo de la imagen es 5MB.'
+    )
+    .refine(
+      (files) => !files || files.length === 0 || STORE_ACCEPTED_IMAGE_TYPES.includes(files[0].type),
+      "Solo se aceptan formatos .jpg, .jpeg, .png y .webp."
+    ),
 });
 type StoreFormValues = z.infer<typeof storeFormSchema>;
 
@@ -312,14 +326,27 @@ function CreateEditStoreForm({
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(existingStore?.logo_url || null);
+  const logoInputRef = React.useRef<HTMLInputElement | null>(null);
   
   const form = useForm<StoreFormValues>({
     resolver: zodResolver(storeFormSchema),
     defaultValues: {
       nombre: existingStore?.nombre || "",
       descripcion: existingStore?.descripcion || "",
+      logoFile: undefined,
     },
   });
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const objectUrl = URL.createObjectURL(file);
+      setLogoPreview(objectUrl);
+      form.setValue('logoFile', files, { shouldValidate: true });
+    }
+  };
 
   const onSubmit = async (values: StoreFormValues) => {
     setIsSubmitting(true);
@@ -330,6 +357,7 @@ function CreateEditStoreForm({
         descripcion: values.descripcion || null,
       };
 
+      // First, create or update the store to get its ID
       if (existingStore?.id) { 
         const { data, error } = await supabase
           .from("tiendas")
@@ -355,9 +383,41 @@ function CreateEditStoreForm({
         if (error) throw error;
         resultStore = data;
       }
-      if (resultStore) {
-        onSuccess(resultStore);
+
+      if (!resultStore) throw new Error("No se pudo obtener los datos de la tienda.");
+
+      // Handle logo image upload if a file was selected
+      const logoFile = values.logoFile?.[0];
+      if (logoFile && resultStore.id) {
+        const fileName = `${Date.now()}_${logoFile.name.replace(/\s+/g, '_')}`;
+        const filePath = `${artisanId}/${resultStore.id}/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('store-images')
+          .upload(filePath, logoFile, { cacheControl: '3600', upsert: true });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage.from('store-images').getPublicUrl(filePath);
+        const newLogoUrl = publicUrlData?.publicUrl;
+
+        if (!newLogoUrl) {
+          await supabase.storage.from('store-images').remove([filePath]);
+          throw new Error("No se pudo obtener la URL pública del logo.");
+        }
+
+        const { data: updatedStore, error: updateError } = await supabase
+          .from("tiendas")
+          .update({ logo_url: newLogoUrl, logo_file_path: filePath })
+          .eq("id", resultStore.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        resultStore = updatedStore;
       }
+
+      onSuccess(resultStore);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -410,6 +470,70 @@ function CreateEditStoreForm({
                       rows={4} 
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {/* Logo image upload */}
+            <FormField
+              control={form.control}
+              name="logoFile"
+              render={() => (
+                <FormItem>
+                  <FormLabel>Logo / Imagen de la Tienda (Opcional)</FormLabel>
+                  <FormControl>
+                    <div className="space-y-3">
+                      {logoPreview && (
+                        <div className="relative w-48 h-32 rounded-md overflow-hidden border border-border">
+                          <Image
+                            src={logoPreview}
+                            alt="Previsualización del logo"
+                            fill
+                            style={{ objectFit: 'cover' }}
+                            sizes="192px"
+                          />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          className="hidden"
+                          ref={logoInputRef}
+                          onChange={handleLogoChange}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => logoInputRef.current?.click()}
+                          disabled={isSubmitting}
+                        >
+                          <ImagePlus className="mr-2 h-4 w-4" />
+                          {logoPreview ? "Cambiar Imagen" : "Seleccionar Imagen"}
+                        </Button>
+                        {logoPreview && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              setLogoPreview(existingStore?.logo_url || null);
+                              form.setValue('logoFile', undefined);
+                              if (logoInputRef.current) logoInputRef.current.value = '';
+                            }}
+                            disabled={isSubmitting}
+                          >
+                            Quitar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </FormControl>
+                  <FormDescription className="text-xs">
+                    Formatos: JPG, PNG, WEBP. Máximo 5MB.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
