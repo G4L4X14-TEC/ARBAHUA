@@ -1007,7 +1007,7 @@ function EditProfileDialog({
   }, [isOpen, profile, formMethods]);
 
   const AVATAR_MAX_SIZE = 5 * 1024 * 1024; // 5MB
-  const AVATAR_ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"] as const;
+  const AVATAR_ALLOWED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
   const AVATAR_CACHE_CONTROL_SECONDS = "300"; // 5 minutes
 
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1022,7 +1022,7 @@ function EditProfileDialog({
         event.target.value = "";
         return;
       }
-      if (!AVATAR_ALLOWED_MIME_TYPES.includes(file.type as typeof AVATAR_ALLOWED_MIME_TYPES[number])) {
+      if (!AVATAR_ALLOWED_MIME_TYPES.has(file.type)) {
         toast({
           title: "Formato no permitido",
           description: "Solo se aceptan imágenes en formato JPG, PNG o WEBP.",
