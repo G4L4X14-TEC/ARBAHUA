@@ -1006,9 +1006,21 @@ function EditProfileDialog({
     }
   }, [isOpen, profile, formMethods]);
 
+  const AVATAR_MAX_SIZE = 5 * 1024 * 1024; // 5MB
+  const AVATAR_ALLOWED_EXTS = ["png", "jpeg", "jpg", "webp"] as const;
+
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > AVATAR_MAX_SIZE) {
+        toast({
+          title: "Archivo demasiado grande",
+          description: "La foto de perfil no puede superar los 5MB.",
+          variant: "destructive",
+        });
+        event.target.value = "";
+        return;
+      }
       setAvatarFile(file);
       const reader = new FileReader();
       reader.onloadend = () => setAvatarPreview(reader.result as string);
@@ -1025,23 +1037,27 @@ function EditProfileDialog({
     setIsUploading(true);
     try {
       if (avatarFile) {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser) {
-          const ext = avatarFile.name.split(".").pop() || "jpg";
-          const filePath = `${authUser.id}/avatar.${ext}`;
-          const { error: uploadError } = await supabase.storage
-            .from("avatars")
-            .upload(filePath, avatarFile, { upsert: true, cacheControl: "3600" });
-          if (uploadError) throw uploadError;
-          const { data: publicUrlData } = supabase.storage
-            .from("avatars")
-            .getPublicUrl(filePath);
-          if (publicUrlData?.publicUrl) {
-            const { error: metaError } = await supabase.auth.updateUser({
-              data: { avatar_url: publicUrlData.publicUrl },
-            });
-            if (metaError) throw metaError;
-          }
+        const { data: { user: authUser }, error: getUserError } = await supabase.auth.getUser();
+        if (getUserError || !authUser) {
+          throw new Error("No se pudo verificar tu sesión. Por favor, vuelve a iniciar sesión.");
+        }
+        const rawExt = (avatarFile.name.split(".").pop() || "").toLowerCase();
+        const ext = AVATAR_ALLOWED_EXTS.includes(rawExt as typeof AVATAR_ALLOWED_EXTS[number])
+          ? rawExt
+          : "jpg";
+        const filePath = `${authUser.id}/avatar_${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, avatarFile, { upsert: false, cacheControl: "300" });
+        if (uploadError) throw uploadError;
+        const { data: publicUrlData } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(filePath);
+        if (publicUrlData?.publicUrl) {
+          const { error: metaError } = await supabase.auth.updateUser({
+            data: { avatar_url: publicUrlData.publicUrl },
+          });
+          if (metaError) throw metaError;
         }
       }
 
