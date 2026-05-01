@@ -1007,7 +1007,8 @@ function EditProfileDialog({
   }, [isOpen, profile, formMethods]);
 
   const AVATAR_MAX_SIZE = 5 * 1024 * 1024; // 5MB
-  const AVATAR_ALLOWED_EXTS = ["png", "jpeg", "jpg", "webp"] as const;
+  const AVATAR_ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"] as const;
+  const AVATAR_CACHE_CONTROL_SECONDS = "300"; // 5 minutes
 
   const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1016,6 +1017,15 @@ function EditProfileDialog({
         toast({
           title: "Archivo demasiado grande",
           description: "La foto de perfil no puede superar los 5MB.",
+          variant: "destructive",
+        });
+        event.target.value = "";
+        return;
+      }
+      if (!AVATAR_ALLOWED_MIME_TYPES.includes(file.type as typeof AVATAR_ALLOWED_MIME_TYPES[number])) {
+        toast({
+          title: "Formato no permitido",
+          description: "Solo se aceptan imágenes en formato JPG, PNG o WEBP.",
           variant: "destructive",
         });
         event.target.value = "";
@@ -1041,21 +1051,28 @@ function EditProfileDialog({
         if (getUserError || !authUser) {
           throw new Error("No se pudo verificar tu sesión. Por favor, vuelve a iniciar sesión.");
         }
-        const rawExt = (avatarFile.name.split(".").pop() || "").toLowerCase();
-        const ext = AVATAR_ALLOWED_EXTS.includes(rawExt as typeof AVATAR_ALLOWED_EXTS[number])
-          ? rawExt
-          : "jpg";
-        const filePath = `${authUser.id}/avatar_${Date.now()}.${ext}`;
+        // Use MIME type to determine the extension, not the filename
+        const mimeToExt: Record<string, string> = {
+          "image/png": "png",
+          "image/jpeg": "jpg",
+          "image/jpg": "jpg",
+          "image/webp": "webp",
+        };
+        const ext = mimeToExt[avatarFile.type] ?? "jpg";
+        // Use a fixed path per user (upsert) to avoid storage bloat
+        const filePath = `${authUser.id}/avatar.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("avatars")
-          .upload(filePath, avatarFile, { upsert: false, cacheControl: "300" });
+          .upload(filePath, avatarFile, { upsert: true, cacheControl: AVATAR_CACHE_CONTROL_SECONDS });
         if (uploadError) throw uploadError;
         const { data: publicUrlData } = supabase.storage
           .from("avatars")
           .getPublicUrl(filePath);
         if (publicUrlData?.publicUrl) {
+          // Append timestamp to bust CDN cache after each upload
+          const avatarUrlWithBuster = `${publicUrlData.publicUrl}?t=${Date.now()}`;
           const { error: metaError } = await supabase.auth.updateUser({
-            data: { avatar_url: publicUrlData.publicUrl },
+            data: { avatar_url: avatarUrlWithBuster },
           });
           if (metaError) throw metaError;
         }
@@ -1077,10 +1094,11 @@ function EditProfileDialog({
           variant: "destructive",
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo actualizar tu perfil.";
       toast({
         title: "Error al Actualizar",
-        description: err.message || "No se pudo actualizar tu perfil.",
+        description: message,
         variant: "destructive",
       });
     } finally {
