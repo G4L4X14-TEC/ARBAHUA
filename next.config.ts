@@ -19,9 +19,15 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'aqcmdxuxkolbzmfljcxx.supabase.co', // ESTE ES EL HOSTNAME DE TU ERROR
+        hostname: 'eoxfluzkdzabekfyvubz.supabase.co',
         port: '',
         pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'eoxfluzkdzabekfyvubz.storage.supabase.co',
+        port: '',
+        pathname: '/storage/v1/s3/**',
       },
     ],
   },
