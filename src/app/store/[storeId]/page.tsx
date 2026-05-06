@@ -63,6 +63,7 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
 
   if (productsError) {
     console.error("[StoreProfilePage] Error fetching store products:", productsError.message);
+    return { ...storeData, productos: [] };
   }
 
   // Procesar productos para obtener la imagen principal
