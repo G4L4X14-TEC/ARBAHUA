@@ -21,6 +21,10 @@ type ProductWithImageUrl = Tables<'productos'> & {
   imagen_url: string | null;
 };
 
+type ProductWithImages = Tables<'productos'> & {
+  imagenes_productos: Array<Pick<Tables<'imagenes_productos'>, 'url' | 'es_principal'>>;
+};
+
 type StoreWithProducts = Tables<'tiendas'> & {
   productos: ProductWithImageUrl[];
 };
@@ -34,13 +38,7 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
 
   const { data: storeData, error } = await supabase
     .from('tiendas')
-    .select(`
-      *,
-      productos (
-        *,
-        imagenes_productos (url, es_principal)
-      )
-    `)
+    .select('*')
     .eq('id', storeId)
     .eq('estado', 'activa') // Solo mostrar tiendas activas
     .maybeSingle(); // Usamos maybeSingle por si la tienda no existe o no está activa
@@ -54,17 +52,28 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
     return null;
   }
 
+  const { data: productsData, error: productsError } = await supabase
+    .from('productos')
+    .select(`
+      *,
+      imagenes_productos (url, es_principal)
+    `)
+    .eq('tienda_id', storeId)
+    .eq('estado', 'activo');
+
+  if (productsError) {
+    console.error("[StoreProfilePage] Error fetching store products:", productsError.message);
+  }
+
   // Procesar productos para obtener la imagen principal
-  const processedProducts = (storeData.productos || [])
-    .filter(product => product.estado === 'activo')
-    .map(product => {
-      const imagesArray = (product.imagenes_productos || []) as unknown as Tables<'imagenes_productos'>[];
-      const principalImage = imagesArray.find(img => img.es_principal === true);
-      return {
-        ...product,
-        imagen_url: principalImage?.url || null,
-      };
-    });
+  const processedProducts = ((productsData || []) as ProductWithImages[]).map(product => {
+    const imagesArray = (product.imagenes_productos || []) as unknown as Tables<'imagenes_productos'>[];
+    const principalImage = imagesArray.find(img => img.es_principal === true);
+    return {
+      ...product,
+      imagen_url: principalImage?.url || null,
+    };
+  });
 
   return { ...storeData, productos: processedProducts };
 }
