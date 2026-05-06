@@ -36,14 +36,13 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
     .from('tiendas')
     .select(`
       *,
-      productos!inner (
+      productos (
         *,
         imagenes_productos (url, es_principal)
       )
     `)
     .eq('id', storeId)
     .eq('estado', 'activa') // Solo mostrar tiendas activas
-    .eq('productos.estado', 'activo') // Solo productos activos de la tienda
     .maybeSingle(); // Usamos maybeSingle por si la tienda no existe o no tiene productos activos
 
   if (error) {
@@ -56,14 +55,16 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
   }
 
   // Procesar productos para obtener la imagen principal
-  const processedProducts = (storeData.productos || []).map(product => {
-    const imagesArray = (product.imagenes_productos || []) as unknown as Tables<'imagenes_productos'>[];
-    const principalImage = imagesArray.find(img => img.es_principal === true);
-    return {
-      ...product,
-      imagen_url: principalImage?.url || null,
-    };
-  });
+  const processedProducts = (storeData.productos || [])
+    .filter(product => product.estado === 'activo')
+    .map(product => {
+      const imagesArray = (product.imagenes_productos || []) as unknown as Tables<'imagenes_productos'>[];
+      const principalImage = imagesArray.find(img => img.es_principal === true);
+      return {
+        ...product,
+        imagen_url: principalImage?.url || null,
+      };
+    });
 
   return { ...storeData, productos: processedProducts };
 }

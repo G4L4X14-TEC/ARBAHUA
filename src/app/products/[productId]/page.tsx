@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import Image from "next/image";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client"; 
 import { Button } from "@/components/ui/button";
@@ -24,8 +25,10 @@ type ProductWithDetails = Tables<'productos'> & {
   tiendas: Pick<Tables<'tiendas'>, 'id' | 'nombre'> | null;
 };
 
-export default function ProductDetailPage({ params }: { params: { productId: string } }) {
-  const productId = params.productId;
+export default function ProductDetailPage() {
+  const params = useParams();
+  const productIdParam = params?.productId;
+  const productId = Array.isArray(productIdParam) ? productIdParam[0] : productIdParam;
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const [product, setProduct] = React.useState<ProductWithDetails | null>(null);
