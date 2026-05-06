@@ -43,7 +43,7 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
     `)
     .eq('id', storeId)
     .eq('estado', 'activa') // Solo mostrar tiendas activas
-    .maybeSingle(); // Usamos maybeSingle por si la tienda no existe o no tiene productos activos
+    .maybeSingle(); // Usamos maybeSingle por si la tienda no existe o no está activa
 
   if (error) {
     console.error("[StoreProfilePage] Error fetching store details:", error.message);
