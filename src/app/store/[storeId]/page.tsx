@@ -68,8 +68,8 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
   return { ...storeData, productos: processedProducts };
 }
 
-export default async function StoreProfilePage({ params }: { params: { storeId: string } }) {
-  const storeId = params.storeId;
+export default async function StoreProfilePage({ params }: { params: Promise<{ storeId: string }> }) {
+  const { storeId } = await params;
   const store = await getStoreDetails(storeId);
 
   if (!store) {

@@ -24,8 +24,8 @@ type ProductWithDetails = Tables<'productos'> & {
   tiendas: Pick<Tables<'tiendas'>, 'id' | 'nombre'> | null;
 };
 
-export default function ProductDetailPage({ params }: { params: { productId: string } }) {
-  const productId = params.productId;
+export default function ProductDetailPage({ params }: { params: Promise<{ productId: string }> }) {
+  const { productId } = React.use(params);
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const [product, setProduct] = React.useState<ProductWithDetails | null>(null);
