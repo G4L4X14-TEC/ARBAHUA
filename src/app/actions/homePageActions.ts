@@ -21,8 +21,8 @@ export type StoreForDisplay = Tables<'tiendas'>;
 
 
 // Helper function to create a Supabase client for Server Actions
-function createSupabaseServerClientAction() {
-  const cookieStore = cookies(); 
+async function createSupabaseServerClientAction() {
+  const cookieStore = await cookies(); 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -66,7 +66,7 @@ function createSupabaseServerClientAction() {
 
 export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> {
   console.log('[getFeaturedProductsAction] Attempting to fetch products.');
-  const supabase = createSupabaseServerClientAction();
+  const supabase = await createSupabaseServerClientAction();
 
   if (!supabase) {
     console.error("[getFeaturedProductsAction] Failed to initialize Supabase client. Env vars might be missing for server action.");
@@ -120,7 +120,7 @@ export async function getFeaturedProductsAction(): Promise<ProductForDisplay[]> 
 
 export async function getFeaturedStoresAction(): Promise<StoreForDisplay[]> {
   console.log('[getFeaturedStoresAction] Attempting to fetch stores.');
-  const supabase = createSupabaseServerClientAction();
+  const supabase = await createSupabaseServerClientAction();
 
   if (!supabase) {
     console.error("[getFeaturedStoresAction] Failed to initialize Supabase client. Env vars might be missing for server action.");
