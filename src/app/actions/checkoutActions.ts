@@ -8,8 +8,8 @@ import Stripe from 'stripe';
 import { getCartItemsAction, type CartItemForDisplay } from './cartPageActions';
 
 // Helper para crear el cliente de Supabase en Server Actions
-function createSupabaseServerClientAction() {
-  const cookieStore = cookies();
+async function createSupabaseServerClientAction() {
+  const cookieStore = await cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -54,7 +54,7 @@ export async function saveShippingAddressAction(
   addressData: ShippingFormValues
 ): Promise<{ success: boolean; addressId?: string; message: string }> {
   console.log('[saveShippingAddressAction] Attempting to save shipping address:', addressData);
-  const supabase = createSupabaseServerClientAction();
+  const supabase = await createSupabaseServerClientAction();
   if (!supabase) {
     return { success: false, message: "Error de conexión con el servidor." };
   }
@@ -147,7 +147,7 @@ export async function createPaymentIntentAction(): Promise<{
     return { success: false, error: 'Error de configuración del servidor de pagos.' };
   }
 
-  const supabase = createSupabaseServerClientAction();
+  const supabase = await createSupabaseServerClientAction();
   if (!supabase) {
     return { success: false, error: "Error de conexión con el servidor de base de datos." };
   }
@@ -197,7 +197,7 @@ export async function createOrderAction(
   totalAmountInCents: number
 ): Promise<{ success: boolean; orderId?: string; message: string }> {
   console.log('[createOrderAction] Attempting to create order. PaymentIntentID:', paymentIntentId, 'AddressID:', shippingAddressId);
-  const supabase = createSupabaseServerClientAction();
+  const supabase = await createSupabaseServerClientAction();
   if (!supabase) {
     return { success: false, message: "Error de conexión con el servidor de base de datos." };
   }
