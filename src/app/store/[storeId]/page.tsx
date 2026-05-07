@@ -32,22 +32,15 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
     return null;
   }
 
-  const { data: storeData, error } = await supabase
+  const { data: storeData, error: storeError } = await supabase
     .from('tiendas')
-    .select(`
-      *,
-      productos!inner (
-        *,
-        imagenes_productos (url, es_principal)
-      )
-    `)
+    .select('*')
     .eq('id', storeId)
     .eq('estado', 'activa') // Solo mostrar tiendas activas
-    .eq('productos.estado', 'activo') // Solo productos activos de la tienda
-    .maybeSingle(); // Usamos maybeSingle por si la tienda no existe o no tiene productos activos
+    .maybeSingle();
 
-  if (error) {
-    console.error("[StoreProfilePage] Error fetching store details:", error.message);
+  if (storeError) {
+    console.error("[StoreProfilePage] Error fetching store details:", storeError.message);
     return null;
   }
 
@@ -55,8 +48,22 @@ async function getStoreDetails(storeId: string): Promise<StoreWithProducts | nul
     return null;
   }
 
+  const { data: productsData, error: productsError } = await supabase
+    .from('productos')
+    .select(`
+      *,
+      imagenes_productos (url, es_principal)
+    `)
+    .eq('tienda_id', storeId)
+    .eq('estado', 'activo');
+
+  if (productsError) {
+    console.error("[StoreProfilePage] Error fetching store products:", productsError.message);
+    return { ...storeData, productos: [] };
+  }
+
   // Procesar productos para obtener la imagen principal
-  const processedProducts = (storeData.productos || []).map(product => {
+  const processedProducts = (productsData || []).map(product => {
     const imagesArray = (product.imagenes_productos || []) as unknown as Tables<'imagenes_productos'>[];
     const principalImage = imagesArray.find(img => img.es_principal === true);
     return {
