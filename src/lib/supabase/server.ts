@@ -3,11 +3,12 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@/lib/supabase/database.types';
 
-export function createSupabaseServerClient() {
+export async function createSupabaseServerClient() {
   const envSupabaseUrl = process.env.SUPABASE_URL;
   const envSupabaseAnonKey = process.env.SUPABASE_ANON_KEY;
   const envNextPublicSupabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const envNextPublicSupabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const cookieStore = await cookies();
 
   // console.log('[SupabaseServerClient] Checking Environment Variables:');
   // console.log(`  process.env.SUPABASE_URL: ${envSupabaseUrl ? 'SET - ' + envSupabaseUrl.substring(0,20) + '...' : 'NOT SET'}`);
@@ -34,20 +35,21 @@ export function createSupabaseServerClient() {
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       get(name: string) {
-        const cookieStore = cookies();
         return cookieStore.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        const cookieStore = cookies();
-        // Removed try...catch for simplification, as per previous discussion.
-        // If this causes issues (e.g., during static prerendering attempting to set cookies),
-        // it might need to be re-added or handled differently.
-        cookieStore.set({ name, value, ...options });
+        try {
+          cookieStore.set({ name, value, ...options });
+        } catch (error) {
+          // noop in contexts where response cookies cannot be mutated
+        }
       },
       remove(name: string, options: CookieOptions) {
-        const cookieStore = cookies();
-        // Removed try...catch for simplification.
-        cookieStore.set({ name, value: '', ...options });
+        try {
+          cookieStore.delete({ name, ...options });
+        } catch (error) {
+          // noop in contexts where response cookies cannot be mutated
+        }
       },
     },
   });
