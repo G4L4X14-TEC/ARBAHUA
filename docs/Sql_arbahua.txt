@@ -1,4 +1,4 @@
-FASE 3 — Esquema base de la BD
+-- FASE 3 — Esquema base de la BD
 
 -- Bloque 1 — Extensión para búsqueda de texto
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -233,7 +233,7 @@ CREATE TABLE public.auditoria_usuarios (
 
 CREATE INDEX idx_auditoria_usuario ON public.auditoria_usuarios(usuario_id);
 
-FASE 4 — Activar RLS y políticas
+-- FASE 4 — Activar RLS y políticas
 
 -- Activar RLS en todas las tablas
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
@@ -373,7 +373,7 @@ CREATE POLICY "artesano ve sus notificaciones" ON public.notificaciones_artesano
 CREATE POLICY "usuario ve su auditoría" ON public.auditoria_usuarios
   FOR SELECT USING (usuario_id = auth.uid());
 
-FASE 5 — Bucket de Storage y políticas
+-- FASE 5 — Bucket de Storage y políticas
 
 -- Cualquiera puede ver las imágenes
 CREATE POLICY "imágenes públicas"
