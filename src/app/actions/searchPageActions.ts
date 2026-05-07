@@ -2,7 +2,7 @@
 
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import type { Tables, Database, Json } from '@/lib/supabase/database.types';
+import type { Tables, Database } from '@/lib/supabase/database.types';
 
 // Type for products fetched from Supabase, including nested data for display
 type ProductFromSupabase = Tables<'productos'> & {
@@ -20,8 +20,8 @@ export type ProductForDisplay = Tables<'productos'> & {
 export type CategoryForDisplay = Tables<'categorias'>;
 
 // Helper function to create a Supabase client for Server Actions
-function createSupabaseServerClientAction() {
-  const cookieStore = cookies();
+async function createSupabaseServerClientAction() {
+  const cookieStore = await cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -59,7 +59,7 @@ function createSupabaseServerClientAction() {
 
 export async function getCategoriesAction(): Promise<CategoryForDisplay[]> {
   // console.log('[getCategoriesAction] Attempting to fetch categories.');
-  const supabase = createSupabaseServerClientAction();
+  const supabase = await createSupabaseServerClientAction();
 
   if (!supabase) {
     console.error("[getCategoriesAction] Failed to initialize Supabase client.");
@@ -73,7 +73,12 @@ export async function getCategoriesAction(): Promise<CategoryForDisplay[]> {
       .order('nombre', { ascending: true });
 
     if (error) {
-      console.error("[getCategoriesAction] Error fetching categories:", error.message);
+      console.error("[getCategoriesAction] Error fetching categories:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
       return [];
     }
     // console.log(`[getCategoriesAction] Fetched ${categoriesData?.length || 0} categories.`);
@@ -92,7 +97,7 @@ interface SearchProductsParams {
 
 export async function searchProductsAction(params: SearchProductsParams): Promise<ProductForDisplay[]> {
   // console.log('[searchProductsAction] Attempting to search products with params:', params);
-  const supabase = createSupabaseServerClientAction();
+  const supabase = await createSupabaseServerClientAction();
 
   if (!supabase) {
     console.error("[searchProductsAction] Failed to initialize Supabase client.");
@@ -124,7 +129,12 @@ export async function searchProductsAction(params: SearchProductsParams): Promis
         .eq('categoria_id', params.categoryId);
 
       if (categoryError) {
-        console.error("[searchProductsAction] Error fetching product IDs by category:", categoryError.message);
+        console.error("[searchProductsAction] Error fetching product IDs by category:", {
+          message: categoryError.message,
+          code: categoryError.code,
+          details: categoryError.details,
+          hint: categoryError.hint,
+        });
         return [];
       }
       
@@ -143,7 +153,12 @@ export async function searchProductsAction(params: SearchProductsParams): Promis
     const { data: productsData, error: productsError } = await query;
 
     if (productsError) {
-      console.error("[searchProductsAction] Error fetching searched products:", productsError.message);
+      console.error("[searchProductsAction] Error fetching searched products:", {
+        message: productsError.message,
+        code: productsError.code,
+        details: productsError.details,
+        hint: productsError.hint,
+      });
       return [];
     }
 
